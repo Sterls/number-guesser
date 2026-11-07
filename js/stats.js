@@ -4,6 +4,9 @@
 // A finished game looks like:
 //   { mode: 'daily' | 'practice', length: 4, date: '2026-11-07', at: 1730000000000,
 //     secret: '0472', guesses: ['1234', '5678', ...], won: true, ms: 81234 }
+// Games against a friend also have mode: 'pvp', result: 'win' | 'lose' | 'draw'
+// and opponent: 'Alex'. Their `won` means the player cracked the code; the
+// secret is null if the friend left before revealing it.
 
 import { fits } from './game.js';
 
@@ -65,6 +68,7 @@ export function computeStats(allGames, { length = null, today = null } = {}) {
   // the code given the feedback so far (i.e. didn't waste information).
   let considered = 0, sharp = 0;
   for (const g of games) {
+    if (!g.secret) continue;
     for (let i = 1; i < g.guesses.length; i++) {
       considered++;
       if (fits(g.guesses[i], g.guesses.slice(0, i), g.secret)) sharp++;
@@ -87,5 +91,6 @@ export function computeStats(allGames, { length = null, today = null } = {}) {
     firstTwo,
     sharpness: considered ? sharp / considered : null,
     streak: today ? dailyStreaks(allGames, today) : { current: 0, best: 0 },
+    versus: ['win', 'lose', 'draw'].reduce((out, r) => ({ ...out, [r]: games.filter((g) => g.mode === 'pvp' && g.result === r).length }), {}),
   };
 }

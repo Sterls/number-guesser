@@ -1,7 +1,11 @@
 import {
   LENGTHS, DAILY_LENGTH, makeSecret, dailySecret, todayKey, dailyNumber,
-  score, guessProblem, remaining, explain,
+  score, guessProblem, remaining, remainingFrom, explain,
 } from './game.js';
+import {
+  newRoomCode, cleanRoomCode, roomFromUrl, newSalt, fingerprint, crackedAt, outcome, checkReveal,
+} from './pvp.js';
+import { joinRoom, online } from './room-net.js';
 import { computeStats } from './stats.js';
 import { load, save, newId, nameProblem } from './storage.js';
 import { confetti } from './confetti.js';
@@ -18,6 +22,9 @@ let resumedAt = null;  // when the clock last started for `game`
 let waitingWorker = null;
 let statsPlayerId = '';
 let statsLength = DAILY_LENGTH;
+let gameView = 'solo'; // what the game screen shows: 'solo' (daily/practice) or 'pvp' (playing a friend)
+let resultKind = 'solo';
+let pendingRoom = null; // room code from an invite link, joined once there's a player
 
 const player = () => data.players.find((p) => p.id === data.currentId) || null;
 const today = () => todayKey();
@@ -25,13 +32,16 @@ const persist = () => save(data);
 
 // ---------- screens ----------
 
-const SCREENS = ['home', 'players', 'game', 'stats', 'help', 'settings'];
+const SCREENS = ['home', 'players', 'versus', 'game', 'stats', 'help', 'settings'];
 function show(name) {
-  if (screen === 'game' && name !== 'game') pauseClock();
+  if (screen === 'game' && name !== 'game' && gameView === 'solo') pauseClock();
   screen = name;
   for (const s of SCREENS) $(s).classList.toggle('hidden', s !== name);
   $('update-bar').classList.toggle('hidden', !waitingWorker || name === 'game');
-  ({ home: renderHome, players: renderPlayers, stats: renderStats, settings: renderSettings, game: renderGame }[name] || (() => {}))();
+  ({
+    home: renderHome, players: renderPlayers, stats: renderStats, settings: renderSettings, versus: renderVersus,
+    game: () => (gameView === 'pvp' ? renderVersusGame() : renderGame()),
+  }[name] || (() => {}))();
 }
 document.querySelectorAll('.back').forEach((b) => b.addEventListener('click', () => {
   if (screen === 'players' && !player()) return; // need a player first
@@ -87,6 +97,8 @@ function renderHome() {
     ? `Daily #${n} ${done.won ? `✓ ${done.guesses.length} guesses` : '✗'}`
     : live ? `Continue daily #${n}` : `Daily code #${n}`;
   $('practice-btn').textContent = p?.inProgress?.practice ? 'Continue practice' : 'Practice';
+  $('versus-btn').classList.toggle('hidden', !online());
+  $('versus-btn').textContent = vs ? `⚔️ Back to room ${vs.code}` : '⚔️ Play a friend';
 }
 
 on('player-chip', 'click', () => show('players'));
@@ -160,7 +172,11 @@ on('add-player', 'submit', (e) => {
   persist();
   $('new-name').value = '';
   $('new-name').blur();
-  if (first && !data.settings.seenHelp) {
+  if (pendingRoom) {
+    const code = pendingRoom;
+    pendingRoom = null;
+    joinRoomCode(code);
+  } else if (first && !data.settings.seenHelp) {
     data.settings.seenHelp = true;
     persist();
     show('help');
@@ -184,6 +200,7 @@ function startGame(g) {
   persist();
   game = g;
   draft = '';
+  gameView = 'solo';
   $('entry-msg').textContent = '';
   show('game');
   resumedAt = performance.now();
@@ -197,22 +214,34 @@ function pauseClock() {
   }
 }
 document.addEventListener('visibilitychange', () => {
-  if (screen !== 'game') return;
+  if (screen !== 'game' || gameView !== 'solo') return;
   if (document.hidden) pauseClock();
   else resumedAt = performance.now();
 });
 
 // The two feedback numbers for a guess, in the "Right spot" and "Wrong spot" columns.
-function countsHtml({ exact, close }) {
+function countsHtml(f) {
+  if (!f) return '<span class="count pending" title="Waiting">…</span><span class="count pending" title="Waiting">…</span>';
+  const { exact, close } = f;
   return `<span class="count exact${exact ? '' : ' zero'}">${exact}</span><span class="count close${close ? '' : ' zero'}">${close}</span>`;
 }
 
 function showExplanation(i) {
-  const g = game.guesses[i];
-  let text = explain(g, score(game.secret, g));
-  if (data.settings.showLeft) {
-    const n = remaining(game.secret, game.guesses.slice(0, i + 1));
-    text += ` ${n.toLocaleString()} possible code${n === 1 ? '' : 's'} left.`;
+  let text;
+  if (gameView === 'pvp') {
+    const g = vs.guesses[i], f = vs.feedback[i];
+    text = f ? explain(g, f) : `${g}: waiting for ${oppName()}'s phone to check it…`;
+    if (f && data.settings.showLeft) {
+      const n = remainingFrom(vs.length, vs.guesses.slice(0, i + 1), vs.feedback);
+      text += ` ${n.toLocaleString()} possible code${n === 1 ? '' : 's'} left.`;
+    }
+  } else {
+    const g = game.guesses[i];
+    text = explain(g, score(game.secret, g));
+    if (data.settings.showLeft) {
+      const n = remaining(game.secret, game.guesses.slice(0, i + 1));
+      text += ` ${n.toLocaleString()} possible code${n === 1 ? '' : 's'} left.`;
+    }
   }
   $('feedback-msg').textContent = text;
   document.querySelectorAll('.guess-row').forEach((row, j) => row.classList.toggle('picked', j === i));
@@ -223,6 +252,10 @@ function tilesHtml(code) {
 }
 
 function renderGame(justGuessed = false) {
+  $('vs-bar').classList.add('hidden');
+  $('guess-head-label').textContent = 'Your guess';
+  $('giveup-btn').classList.remove('hidden');
+  $('entry').classList.remove('hidden');
   $('game-title').textContent = game.mode === 'daily'
     ? `Daily #${dailyNumber(game.date)}`
     : `Practice · ${game.length} digits`;
@@ -246,10 +279,25 @@ function renderGame(justGuessed = false) {
   renderEntry();
 }
 
+// What the keypad is for right now.
+function entryTarget() {
+  if (gameView === 'pvp') {
+    return vs ? { length: vs.length, notes: vs.notes, go: vs.phase === 'setcode' ? 'Lock in' : 'Guess', showNotes: vs.phase === 'play' } : null;
+  }
+  return game ? { length: game.length, notes: game.notes, go: 'Guess', showNotes: true } : null;
+}
+
+function entryOpen() {
+  if (gameView !== 'pvp') return Boolean(game);
+  return Boolean(vs) && (vs.phase === 'setcode' || (vs.phase === 'play' && !myDone()));
+}
+
 function renderEntry() {
+  const t = entryTarget();
+  if (!t) return;
   const slots = $('slots');
   slots.innerHTML = '';
-  for (let i = 0; i < game.length; i++) {
+  for (let i = 0; i < t.length; i++) {
     const s = document.createElement('span');
     s.className = `tile slot${i === draft.length ? ' next' : ''}${draft[i] ? ' filled' : ''}`;
     s.textContent = draft[i] || '';
@@ -257,36 +305,38 @@ function renderEntry() {
   }
   // Notes: 0 = unknown, 1 = ruled out, 2 = definitely in.
   const notes = $('notes');
+  notes.classList.toggle('hidden', !t.showNotes);
   notes.innerHTML = '<span class="notes-label">Notes</span>';
   for (const d of '0123456789') {
     const b = document.createElement('button');
-    const state = game.notes[d] || 0;
+    const state = t.notes[d] || 0;
     b.className = `note n${state}`;
     b.textContent = d;
     b.setAttribute('aria-label', `${d}: ${['no note', 'not in the code', 'in the code'][state]}`);
-    b.onclick = () => { game.notes[d] = (state + 1) % 3; persist(); renderEntry(); };
+    b.onclick = () => { t.notes[d] = (state + 1) % 3; persist(); renderEntry(); };
     notes.appendChild(b);
   }
   const pad = $('keypad');
   pad.innerHTML = '';
   for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'go']) {
     const b = document.createElement('button');
-    b.className = `key${k === 'go' ? ' go' : k === 'del' ? ' del' : ''}${game.notes[k] === 1 ? ' out' : ''}${game.notes[k] === 2 ? ' in' : ''}`;
-    b.textContent = k === 'del' ? '⌫' : k === 'go' ? 'Guess' : k;
+    b.className = `key${k === 'go' ? ' go' : k === 'del' ? ' del' : ''}${t.showNotes && t.notes[k] === 1 ? ' out' : ''}${t.showNotes && t.notes[k] === 2 ? ' in' : ''}`;
+    b.textContent = k === 'del' ? '⌫' : k === 'go' ? t.go : k;
     if (k === 'del') b.setAttribute('aria-label', 'Delete');
-    b.disabled = (k.length === 1 && (draft.includes(k) || draft.length >= game.length))
-      || (k === 'go' && draft.length !== game.length) || (k === 'del' && !draft.length);
+    b.disabled = (k.length === 1 && (draft.includes(k) || draft.length >= t.length))
+      || (k === 'go' && draft.length !== t.length) || (k === 'del' && !draft.length);
     b.onclick = () => press(k);
     pad.appendChild(b);
   }
 }
 
 function press(k) {
-  if (!game || screen !== 'game' || !$('result').classList.contains('hidden')) return;
+  if (screen !== 'game' || !entryOpen() || !$('result').classList.contains('hidden')) return;
+  const t = entryTarget();
   $('entry-msg').textContent = '';
   if (k === 'del') draft = draft.slice(0, -1);
-  else if (k === 'go') return submit();
-  else if (draft.length < game.length && !draft.includes(k)) draft += k;
+  else if (k === 'go') return gameView === 'pvp' ? versusSubmit() : submit();
+  else if (draft.length < t.length && !draft.includes(k)) draft += k;
   renderEntry();
 }
 
@@ -312,6 +362,7 @@ function submit() {
 }
 
 on('giveup-btn', 'click', async () => {
+  if (gameView === 'pvp') return versusGiveUp();
   if (!game) return;
   if (await ask('Give up and see the code? It counts as a loss in your stats.', { yes: 'Give up' })) finish(false);
 });
@@ -355,6 +406,12 @@ function shareText(r) {
 
 function showResult(r) {
   lastResult = r;
+  resultKind = 'solo';
+  $('result-label').classList.add('hidden');
+  $('again-btn').textContent = 'Play again';
+  $('share-btn').classList.remove('hidden');
+  $('result-stats-btn').textContent = '📊 Stats';
+  $('result-home-btn').textContent = 'Menu';
   const p = player();
   $('result-title').textContent = r.won ? (r.guesses.length === 1 ? 'First try?!' : 'Cracked it!') : 'The code was…';
   $('result-code').innerHTML = tilesHtml(r.secret);
@@ -371,10 +428,23 @@ function showResult(r) {
 }
 
 const closeResult = () => $('result').classList.add('hidden');
-on('again-btn', 'click', () => { closeResult(); startGame(newGame('practice', data.settings.length)); });
-on('result-home-btn', 'click', () => { closeResult(); show('home'); });
+on('again-btn', 'click', () => {
+  closeResult();
+  if (resultKind === 'pvp') rematch();
+  else startGame(newGame('practice', data.settings.length));
+});
+on('result-home-btn', 'click', async () => {
+  if (resultKind === 'pvp') {
+    if (!await leaveRoom()) return;
+    closeResult();
+    return;
+  }
+  closeResult();
+  show('home');
+});
 on('result-stats-btn', 'click', () => {
   closeResult();
+  if (resultKind === 'pvp') return renderVersusGame();
   statsPlayerId = data.currentId;
   statsLength = lastResult?.length ?? DAILY_LENGTH;
   show('stats');
@@ -388,6 +458,438 @@ on('share-btn', 'click', async () => {
     if (err?.name !== 'AbortError') toast("Couldn't share on this phone.");
   }
 });
+
+// ---------- play a friend ----------
+//
+// Each phone keeps its own side of the game in `vs` (saved, so a reload
+// rejoins the room) and sends a snapshot of what the other phone may see
+// whenever it changes, plus every few seconds in case a message was missed.
+// The other phone works everything out from the snapshots, so messages can
+// arrive twice, late or not at all without anything going wrong.
+
+let vs = data.versus;
+let room = null;           // the live connection
+let roomState = 'off';     // 'connecting' | 'on' | 'error'
+let roomError = '';
+let heartbeat = null;
+let vsTab = 'mine';        // which guesses the game screen lists: 'mine' or 'theirs'
+let vsLength = DAILY_LENGTH;
+let locking = false;
+
+const oppName = () => vs?.opp?.name || 'your friend';
+const vsPlayer = () => data.players.find((p) => p.id === vs?.playerId) || player();
+const myDone = () => Boolean(vs) && (vs.gaveUp || crackedAt(vs.feedback, vs.length) != null);
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 'es'}`;
+
+function freshRound(round) {
+  return {
+    round, phase: 'setcode', secret: '', salt: '', hash: '', startedAt: 0,
+    guesses: [], times: [], feedback: [], answers: [], gaveUp: false, notes: {},
+    result: null, verify: '', checked: false, recordAt: null,
+  };
+}
+
+function freshOpp(o, round) {
+  return {
+    id: o?.id || '', name: o?.name || '', present: o?.present || false,
+    round, hash: '', guesses: [], times: [], answers: [], gaveUp: false, reveal: null,
+  };
+}
+
+function startRoom(code, host) {
+  vs = data.versus = {
+    code, host, length: host ? vsLength : 0, meId: newId(), playerId: data.currentId,
+    ...freshRound(1), phase: 'waiting', opp: freshOpp(null, 1),
+  };
+  persist();
+  show('versus');
+  connect();
+}
+
+function joinRoomCode(code) {
+  if (vs?.code === code) return openRoom();
+  if (vs) {
+    toast(`Leave room ${vs.code} first.`);
+    return openRoom();
+  }
+  startRoom(code, false);
+}
+
+function openRoom() {
+  if (!vs) return show('versus');
+  if (vs.phase === 'waiting') return show('versus');
+  gameView = 'pvp';
+  draft = '';
+  $('entry-msg').textContent = '';
+  show('game');
+}
+
+async function connect() {
+  if (room || !vs) return;
+  roomState = 'connecting';
+  refresh();
+  const me = { id: vs.meId, name: vsPlayer()?.name || 'Player' };
+  try {
+    const r = await joinRoom(vs.code, me, { onPlayers, onMessage });
+    if (!vs) return void r.leave(); // left while connecting
+    room = r;
+    roomState = 'on';
+    sendState();
+    heartbeat = setInterval(sendState, 4000);
+  } catch (err) {
+    roomState = 'error';
+    roomError = err.message;
+  }
+  refresh();
+}
+
+async function leaveRoom() {
+  if (!vs) return true;
+  if ((vs.phase === 'play' || vs.phase === 'locked') && !await ask("Leave the room? This game won't count.", { yes: 'Leave' })) return false;
+  clearInterval(heartbeat);
+  room?.leave();
+  room = null;
+  vs = data.versus = null;
+  roomState = 'off';
+  persist();
+  show('home');
+  return true;
+}
+
+function sendState() {
+  if (!room || !vs) return;
+  room.send('state', {
+    round: vs.round, name: vsPlayer()?.name, host: vs.host, length: vs.length,
+    hash: vs.hash, guesses: vs.guesses, times: vs.times, answers: vs.answers, gaveUp: vs.gaveUp,
+    reveal: vs.phase === 'done' ? { secret: vs.secret, salt: vs.salt } : null,
+  });
+}
+
+function onPlayers(list) {
+  if (!vs) return;
+  const everyone = [...list].sort((a, b) => a.joinedAt - b.joinedAt);
+  if (!vs.opp.id && everyone.findIndex((p) => p.id === vs.meId) >= 2) {
+    toast('That room already has two players.');
+    clearInterval(heartbeat);
+    room?.leave();
+    room = null;
+    vs = data.versus = null;
+    persist();
+    return show('versus');
+  }
+  const others = everyone.filter((p) => p.id !== vs.meId);
+  const o = vs.opp.id ? others.find((p) => p.id === vs.opp.id) : others[0];
+  if (o && !vs.opp.id) vs.opp.id = o.id;
+  if (o) vs.opp.name = o.name;
+  vs.opp.present = Boolean(o);
+  advance();
+  persist();
+  sendState(); // so someone who just arrived gets everything straight away
+  refresh();
+}
+
+function onMessage(type, d, from) {
+  if (type !== 'state' || !vs || !d) return;
+  if (vs.opp.id && from !== vs.opp.id) return;
+  if (!vs.opp.id) vs.opp.id = from;
+  vs.opp.name = d.name || vs.opp.name;
+  vs.opp.present = true;
+  if (!vs.host && d.host) {
+    if (!vs.length) vs.length = d.length;
+    if (vs.phase === 'waiting' && d.round > vs.round) Object.assign(vs, freshRound(d.round), { phase: 'waiting' });
+  }
+  if (d.round !== vs.round) {
+    // Higher: they've asked for a rematch. Lower: they'll catch up when they see ours.
+    if (d.round > vs.round) vs.opp.round = d.round;
+    persist();
+    return refresh();
+  }
+  Object.assign(vs.opp, {
+    round: d.round, hash: d.hash || '', guesses: d.guesses || [], times: d.times || [],
+    answers: d.answers || [], gaveUp: Boolean(d.gaveUp), reveal: d.reveal || null,
+  });
+  let changed = answerTheirGuesses();
+  vs.feedback = vs.guesses.map((_, i) => vs.opp.answers[i] || null);
+  changed = advance() || changed;
+  persist();
+  if (changed) sendState();
+  verifyReveal();
+  refresh();
+}
+
+// Score their guesses at my code (only my phone knows it).
+function answerTheirGuesses() {
+  if (!vs.secret) return false;
+  let changed = false;
+  while (vs.answers.length < vs.opp.guesses.length) {
+    vs.answers.push(score(vs.secret, String(vs.opp.guesses[vs.answers.length])));
+    changed = true;
+  }
+  return changed;
+}
+
+// Move the game along: waiting → set codes → play → done. Returns true if anything changed.
+function advance() {
+  let changed = false;
+  if (vs.phase === 'waiting' && vs.opp.present && vs.length) {
+    vs.phase = 'setcode';
+    changed = true;
+    if (screen === 'versus') openRoom();
+  }
+  if (vs.phase === 'locked' && vs.opp.hash) {
+    vs.phase = 'play';
+    vs.startedAt = Date.now();
+    changed = true;
+  }
+  if (vs.phase === 'play') {
+    const r = outcome(vs.length,
+      { feedback: vs.feedback, times: vs.times, gaveUp: vs.gaveUp },
+      { feedback: vs.answers, times: vs.opp.times, gaveUp: vs.opp.gaveUp });
+    if (r) {
+      vs.phase = 'done';
+      vs.result = r;
+      recordVersus();
+      changed = true;
+      if (r.result === 'win') {
+        confetti(['#30a46c', '#f5b400', '#6c63ff', '#7cc6fe', '#ffb4a2']);
+        if (data.settings.vibrate) navigator.vibrate?.([30, 60, 30]);
+      }
+      setTimeout(showVersusResult, 600); // let the last feedback show first
+    }
+  }
+  return changed;
+}
+
+function recordVersus() {
+  const p = vsPlayer();
+  if (!p) return;
+  const n = crackedAt(vs.feedback, vs.length);
+  const at = Date.now();
+  p.games.push({
+    mode: 'pvp', length: vs.length, date: today(), at,
+    secret: vs.opp.reveal?.secret || null, guesses: n ? vs.guesses.slice(0, n) : [...vs.guesses],
+    won: n != null, ms: n ? vs.times[n - 1] : at - vs.startedAt,
+    result: vs.result.result, opponent: oppName(),
+  });
+  vs.recordAt = at;
+}
+
+// Once their code is revealed, check it against their fingerprint and feedback.
+async function verifyReveal() {
+  if (vs?.phase !== 'done' || !vs.opp.reveal || vs.checked) return;
+  vs.checked = true;
+  const round = vs.round;
+  const problem = await checkReveal(round, vs.opp.reveal, vs.opp.hash, vs.guesses, vs.feedback);
+  if (!vs || vs.round !== round) return;
+  vs.verify = problem;
+  const rec = vsPlayer()?.games.find((g) => g.at === vs.recordAt);
+  if (rec) rec.secret = vs.opp.reveal.secret;
+  persist();
+  refresh();
+}
+
+async function versusSubmit() {
+  const problem = guessProblem(draft, vs.length);
+  if (problem) return void ($('entry-msg').textContent = problem);
+  if (vs.phase === 'setcode') {
+    if (locking) return;
+    locking = true;
+    const round = vs.round;
+    const secret = draft, salt = newSalt();
+    const hash = await fingerprint(round, secret, salt);
+    locking = false;
+    if (!vs || vs.round !== round || vs.phase !== 'setcode') return;
+    Object.assign(vs, { secret, salt, hash, phase: 'locked' });
+  } else {
+    if (vs.guesses.includes(draft)) return void ($('entry-msg').textContent = `You already tried ${draft}.`);
+    vs.guesses.push(draft);
+    vs.times.push(Date.now() - vs.startedAt);
+    vs.feedback.push(null);
+  }
+  draft = '';
+  answerTheirGuesses();
+  advance();
+  persist();
+  sendState();
+  renderVersusGame(vs.phase === 'play');
+}
+
+async function versusGiveUp() {
+  if (vs?.phase !== 'play' || myDone()) return;
+  if (!await ask(`Give up? ${oppName()} wins.`, { yes: 'Give up' })) return;
+  vs.gaveUp = true;
+  advance();
+  persist();
+  sendState();
+  refresh();
+}
+
+function rematch() {
+  if (!vs) return;
+  const round = vs.opp.round > vs.round ? vs.opp.round : vs.round + 1;
+  const o = vs.opp;
+  Object.assign(vs, freshRound(round), { phase: o.present ? 'setcode' : 'waiting' });
+  vs.opp = freshOpp(o, round);
+  persist();
+  sendState();
+  openRoom();
+}
+
+// Redraw whatever is showing after the room changes.
+function refresh() {
+  if (screen === 'versus') renderVersus();
+  else if (screen === 'game' && gameView === 'pvp') renderVersusGame();
+  else if (screen === 'home') renderHome();
+  if (resultKind === 'pvp' && !$('result').classList.contains('hidden')) showVersusResult();
+}
+
+// ----- lobby screen -----
+
+function renderVersus() {
+  $('lobby-start').classList.toggle('hidden', Boolean(vs));
+  $('lobby-room').classList.toggle('hidden', !vs);
+  const chips = $('vs-length');
+  chips.innerHTML = '';
+  for (const len of LENGTHS) {
+    const b = document.createElement('button');
+    b.className = `chip${len === vsLength ? ' on' : ''}`;
+    b.textContent = len;
+    b.setAttribute('aria-label', `${len} digits`);
+    b.onclick = () => { vsLength = len; renderVersus(); };
+    chips.appendChild(b);
+  }
+  if (!vs) return;
+  if (vs.phase !== 'waiting') return openRoom();
+  $('room-code').textContent = vs.code;
+  $('share-room').classList.toggle('hidden', !vs.host);
+  $('room-status').textContent = roomState === 'connecting' ? 'Connecting…'
+    : roomState === 'error' ? `Couldn't connect (${roomError}). Check your internet and try again.`
+      : vs.host ? 'Waiting for your friend to join…' : 'Joining your friend…';
+}
+
+on('versus-btn', 'click', () => (vs ? openRoom() : show('versus')));
+on('create-room', 'click', () => startRoom(newRoomCode(), true));
+on('join-form', 'submit', (e) => {
+  e.preventDefault();
+  const code = cleanRoomCode($('join-code').value);
+  if (!code) return toast('Room codes are 5 letters and numbers.');
+  $('join-code').value = '';
+  $('join-code').blur();
+  joinRoomCode(code);
+});
+on('leave-room', 'click', () => leaveRoom());
+on('share-room', 'click', async () => {
+  const url = inviteLink(vs.code);
+  const text = `Play Vault with me! Crack my code before I crack yours. Room ${vs.code}:`;
+  try {
+    if (navigator.share) await navigator.share({ text, url });
+    else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Invite link copied. Send it to your friend.'); }
+  } catch (err) {
+    if (err?.name !== 'AbortError') toast(`Couldn't share. Tell your friend the room code: ${vs.code}`);
+  }
+});
+
+function inviteLink(code) {
+  const params = new URLSearchParams(location.search);
+  params.set('room', code);
+  return `${location.origin}${location.pathname}?${params}`;
+}
+
+// ----- game screen -----
+
+function rowHtml(i, guess, f, isNew) {
+  return `<li class="guess-row grid len${guess.length}${isNew ? ' new' : ''}" data-i="${i}">
+    <span class="num">${i + 1}</span><span class="tiles">${tilesHtml(guess)}</span>${countsHtml(f)}</li>`;
+}
+
+function renderVersusGame(justGuessed = false) {
+  if (!vs) return show('home');
+  const o = vs.opp, name = esc(oppName());
+  const playing = vs.phase === 'play' || vs.phase === 'done';
+  $('game-title').textContent = `vs ${oppName()}`;
+  $('vs-bar').classList.remove('hidden');
+  $('giveup-btn').classList.toggle('hidden', !(vs.phase === 'play' && !myDone()));
+  $('entry').classList.toggle('hidden', !entryOpen());
+  $('feedback-msg').textContent = '';
+
+  // Status line
+  const offline = !o.present ? ` <span class="warn">${name} is offline</span>` : '';
+  let status = '';
+  if (vs.phase === 'waiting') status = `Waiting for ${name}…`;
+  else if (vs.phase === 'setcode') status = `Set a secret code for <b>${name}</b> to crack.`;
+  else if (vs.phase === 'locked') status = `Waiting for <b>${name}</b> to set their code…`;
+  else {
+    const mine = crackedAt(vs.feedback, vs.length), theirs = crackedAt(vs.answers, vs.length);
+    const me = mine ? `You cracked it in ${mine}` : vs.gaveUp ? 'You gave up' : `You: ${plural(vs.guesses.length, 'guess')}`;
+    const them = theirs ? `${name} cracked it in ${theirs}` : o.gaveUp ? `${name} gave up` : `${name}: ${plural(o.guesses.length, 'guess')}`;
+    status = `${me} · ${them}`;
+    if (vs.phase === 'done') {
+      const word = { win: 'You win!', lose: `${name} wins.`, draw: "It's a draw." }[vs.result.result];
+      status = `<b>${word}</b> ${status}${o.round > vs.round ? `<br><b>${name} wants a rematch!</b>` : ''}`
+        + '<span class="vs-actions"><button class="btn small" data-act="rematch">Rematch</button><button class="btn small secondary" data-act="leave">Leave</button></span>';
+    } else if (mine || vs.gaveUp) status += `<br>Waiting for ${name} to finish…`;
+  }
+  $('vs-status').innerHTML = status + (vs.phase !== 'done' ? offline : '');
+  $('vs-status').querySelector('[data-act="rematch"]')?.addEventListener('click', rematch);
+  $('vs-status').querySelector('[data-act="leave"]')?.addEventListener('click', () => leaveRoom());
+
+  // Tabs
+  const tabs = $('vs-tabs');
+  tabs.classList.toggle('hidden', !playing);
+  tabs.innerHTML = playing ? `
+    <button class="tab${vsTab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">Your guesses</button>
+    <button class="tab${vsTab === 'theirs' ? ' on' : ''}" data-tab="theirs" role="tab">${name}'s guesses (${o.guesses.length})</button>` : '';
+  tabs.querySelectorAll('.tab').forEach((t) => { t.onclick = () => { vsTab = t.dataset.tab; renderVersusGame(); }; });
+
+  // List
+  const list = $('guesses');
+  const codeCard = (label, code) => `<li class="code-card"><span>${label}</span><span class="tiles">${tilesHtml(code)}</span></li>`;
+  let rows = [];
+  if (vs.phase === 'setcode') {
+    list.innerHTML = `<li class="empty">Pick ${vs.length} different digits and tap <b>Lock in</b>.<br>Your code stays on this phone until the game ends.</li>`;
+  } else if (vs.phase === 'locked') {
+    list.innerHTML = codeCard('Your code 🔒', vs.secret)
+      + `<li class="empty">When ${name} has set theirs, you both start guessing. Fewest guesses wins; if it's a tie, the faster player wins.</li>`;
+  } else if (vsTab === 'theirs') {
+    rows = o.guesses.map((g, i) => rowHtml(i, String(g), vs.answers[i], false));
+    list.innerHTML = codeCard('Your code', vs.secret)
+      + (rows.length ? rows.join('') : `<li class="empty">${name} hasn't guessed yet.</li>`);
+  } else {
+    rows = vs.guesses.map((g, i) => rowHtml(i, g, vs.feedback[i], justGuessed && i === vs.guesses.length - 1));
+    list.innerHTML = rows.length ? rows.join('')
+      : `<li class="empty">Go! Guess ${name}'s ${vs.length}-digit code.<br>Each guess gets feedback: <b class="t-exact">right spot</b> and <b class="t-close">wrong spot</b>.</li>`;
+    list.querySelectorAll('.guess-row').forEach((row) => { row.onclick = () => showExplanation(Number(row.dataset.i)); });
+    if (vs.guesses.length) showExplanation(vs.guesses.length - 1);
+  }
+  $('guess-head').classList.toggle('hidden', !rows.length);
+  $('guess-head-label').textContent = vsTab === 'theirs' ? `${oppName()}'s guess` : 'Your guess';
+  list.scrollTop = list.scrollHeight;
+  if (entryOpen()) renderEntry();
+}
+
+function showVersusResult() {
+  if (!vs || vs.phase !== 'done') return;
+  resultKind = 'pvp';
+  const o = vs.opp, name = oppName();
+  const mine = crackedAt(vs.feedback, vs.length), theirs = crackedAt(vs.answers, vs.length);
+  $('result-title').textContent = { win: 'You win! 🏆', lose: `${name} wins`, draw: "It's a draw" }[vs.result.result];
+  $('result-label').textContent = `${name}'s code`;
+  $('result-label').classList.remove('hidden');
+  $('result-code').innerHTML = tilesHtml(o.reveal?.secret || '?'.repeat(vs.length));
+  const side = (n, gaveUp) => (n ? plural(n, 'guess') : gaveUp ? 'gave up' : 'not cracked');
+  $('result-text').textContent = `You: ${side(mine, vs.gaveUp)} · ${name}: ${side(theirs, o.gaveUp)}`;
+  $('result-extra').textContent = [
+    vs.result.reason,
+    vs.verify && `⚠️ ${vs.verify}`,
+    o.round > vs.round && `${name} wants a rematch!`,
+  ].filter(Boolean).join(' ');
+  $('again-btn').textContent = 'Rematch';
+  $('again-btn').classList.remove('hidden');
+  $('share-btn').classList.add('hidden');
+  $('result-stats-btn').textContent = 'See the guesses';
+  $('result-home-btn').textContent = 'Leave room';
+  $('result').classList.remove('hidden');
+}
 
 // ---------- stats ----------
 
@@ -431,6 +933,7 @@ function renderStats() {
         <div class="stat"><b>${s.streak.current}<span class="sub">/${s.streak.best}</span></b><small>daily streak / best</small></div>
       </div>
       <p class="fine center">Last 10 cracks: avg ${fmt(s.recentAvg)} guesses · Gave up ${s.gaveUp} time${s.gaveUp === 1 ? '' : 's'}</p>
+      ${s.versus.win + s.versus.lose + s.versus.draw ? `<p class="fine center">⚔️ Against friends: <b>${s.versus.win}</b> won · <b>${s.versus.lose}</b> lost${s.versus.draw ? ` · <b>${s.versus.draw}</b> drawn` : ''}</p>` : ''}
 
       <h3>Guesses to crack</h3>
       <div class="dist">${s.distribution.map((d) => `
@@ -450,9 +953,9 @@ function renderStats() {
 
       <h3>Recent games</h3>
       <ul class="recent">${recent.map((g) => `
-        <li><span>${g.mode === 'daily' ? `Daily #${dailyNumber(g.date)}` : `Practice · ${g.length}`}</span>
-        <span class="tiles small">${tilesHtml(g.secret)}</span>
-        <b>${g.won ? `${g.guesses.length} guesses` : 'gave up'}</b></li>`).join('')}
+        <li><span>${g.mode === 'daily' ? `Daily #${dailyNumber(g.date)}` : g.mode === 'pvp' ? `vs ${esc(g.opponent)} · ${{ win: 'won', lose: 'lost', draw: 'draw' }[g.result]}` : `Practice · ${g.length}`}</span>
+        <span class="tiles small">${tilesHtml(g.secret || '?'.repeat(g.length))}</span>
+        <b>${g.won ? `${g.guesses.length} guesses` : g.mode === 'pvp' ? 'not cracked' : 'gave up'}</b></li>`).join('')}
       </ul>`;
   }
 
@@ -526,7 +1029,23 @@ function init() {
   setupUpdates();
   // Older saves may lack inProgress.
   for (const p of data.players) p.inProgress ||= {};
-  show(player() ? 'home' : 'players');
+  // An invite link: join that room (once there's a player to play as).
+  pendingRoom = roomFromUrl(location.search);
+  if (pendingRoom) {
+    const params = new URLSearchParams(location.search);
+    params.delete('room');
+    const rest = params.toString();
+    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}`);
+  }
+  if (vs && !online()) vs = data.versus = null;
+  if (vs) connect(); // still in a room from before: rejoin it
+  if (!player()) show('players');
+  else if (pendingRoom) {
+    const code = pendingRoom;
+    pendingRoom = null;
+    joinRoomCode(code);
+  } else if (vs) openRoom();
+  else show('home');
   window.crackReady = true;
 }
 

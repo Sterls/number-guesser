@@ -102,6 +102,17 @@ export function remaining(secret, guesses) {
   return allCodes(secret.length).filter((c) => fits(c, guesses, secret)).length;
 }
 
+// The same, from the feedback alone (playing a friend, the secret isn't known).
+// Guesses still waiting for feedback are skipped.
+export function remainingFrom(length, guesses, feedback) {
+  return allCodes(length).filter((c) => guesses.every((g, i) => {
+    const f = feedback[i];
+    if (!f) return true;
+    const b = score(c, g);
+    return b.exact === f.exact && b.close === f.close;
+  })).length;
+}
+
 const digitWord = (n) => `${n} digit${n === 1 ? '' : 's'}`;
 
 // The feedback in plain words, e.g. "4502: 1 digit in the right spot, 2 in the code but in the wrong spot, 1 not in the code."

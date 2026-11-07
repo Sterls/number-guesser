@@ -1,10 +1,14 @@
 // Players, their finished games and settings, saved on the phone only.
 
-const KEY = 'vault-save-v1';
+// With `?localroom=a` in the address (testing two players in one browser),
+// each tab name gets its own save so the two players don't share one.
+const testTab = typeof location !== 'undefined' && new URLSearchParams(location.search).get('localroom');
+const KEY = `vault-save-v1${testTab ? `-${testTab}` : ''}`;
 
 const defaults = () => ({
-  players: [], // { id, name, created, games: [], current: null | unfinished game }
+  players: [], // { id, name, created, games: [], inProgress: { daily, practice } }
   currentId: '',
+  versus: null, // the room this phone is in when playing a friend (see js/main.js)
   settings: { length: 4, showLeft: false, vibrate: true, seenHelp: false },
 });
 

@@ -51,6 +51,7 @@
     <button id="player-chip" class="player-chip">Playing as <b id="player-name">…</b> <span aria-hidden="true">▾</span></button>
     <button id="daily-btn" class="btn big">Daily code</button>
     <button id="practice-btn" class="btn secondary">Practice</button>
+    <button id="versus-btn" class="btn secondary hidden">⚔️ Play a friend</button>
     <button id="stats-btn" class="btn secondary">📊 Stats</button>
     <div class="home-row">
       <button id="help-btn" class="btn ghost">How to play</button>
@@ -76,6 +77,42 @@
     </form>
   </section>
 
+  <!-- Play a friend: create or join a room -->
+  <section id="versus" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Play a friend</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <div class="scroll lobby">
+      <div id="lobby-start">
+        <p class="lobby-intro">You each set a secret code for the other to crack, then race to crack it. Fewest guesses wins.</p>
+        <div class="card lobby-card">
+          <h3>Create a room</h3>
+          <div class="setting"><span>Code length</span><div id="vs-length" class="chips" role="group" aria-label="Code length"></div></div>
+          <button id="create-room" class="btn">Create room</button>
+        </div>
+        <form id="join-form" class="card lobby-card">
+          <h3>Join a friend's room</h3>
+          <div class="row">
+            <input id="join-code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="Room code" aria-label="Room code">
+            <button class="btn small" type="submit">Join</button>
+          </div>
+          <p class="fine">Or just open the invite link they send you.</p>
+        </form>
+      </div>
+      <div id="lobby-room" class="hidden">
+        <div class="card lobby-card center">
+          <p class="fine">Room code</p>
+          <p id="room-code" class="room-code"></p>
+          <button id="share-room" class="btn">Send invite</button>
+          <p id="room-status" class="room-status" role="status"></p>
+        </div>
+        <button id="leave-room" class="btn ghost">Leave room</button>
+      </div>
+    </div>
+  </section>
+
   <!-- Game -->
   <section id="game" class="screen hidden">
     <div class="bar">
@@ -83,12 +120,16 @@
       <h2 id="game-title">Daily</h2>
       <button id="giveup-btn" class="icon-btn" aria-label="Give up"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
     </div>
+    <div id="vs-bar" class="vs-bar hidden">
+      <p id="vs-status" class="vs-status" role="status"></p>
+      <div id="vs-tabs" class="tabs" role="tablist"></div>
+    </div>
     <div id="guess-head" class="guess-head grid hidden" aria-hidden="true">
-      <span></span><span>Your guess</span>
+      <span></span><span id="guess-head-label">Your guess</span>
       <span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span>
     </div>
     <ol id="guesses" class="guesses"></ol>
-    <div class="entry">
+    <div id="entry" class="entry">
       <div id="slots" class="slots"></div>
       <p id="feedback-msg" class="feedback-msg" role="status" aria-live="polite"></p>
       <p id="entry-msg" class="entry-msg" role="status"></p>
@@ -177,6 +218,7 @@
   <div id="result" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
     <div class="modal-card">
       <h2 id="result-title">Cracked it!</h2>
+      <p id="result-label" class="fine hidden"></p>
       <p id="result-code" class="tiles big"></p>
       <p id="result-text"></p>
       <p id="result-extra" class="fine"></p>

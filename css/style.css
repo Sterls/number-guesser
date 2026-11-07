@@ -363,3 +363,35 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); text-transform: u
 }
 #error p { margin: 0 0 14px; }
 .error-detail { margin-top: 18px !important; font-size: 12px; color: var(--ink-soft); word-break: break-word; }
+
+/* ---------- play a friend ---------- */
+
+.lobby { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
+.lobby > div { display: flex; flex-direction: column; gap: 14px; }
+.lobby-intro { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink-soft); text-align: center; }
+.lobby-card { display: flex; flex-direction: column; gap: 14px; }
+.lobby-card h3 { margin: 0; }
+.lobby-card .row { display: flex; gap: 10px; }
+.lobby-card .fine { margin: 0; }
+#join-code { text-transform: uppercase; letter-spacing: 3px; font-weight: 800; }
+.room-code { margin: 0; font-size: 46px; font-weight: 900; letter-spacing: 8px; color: var(--accent); }
+.room-status { margin: 0; font-size: 15px; color: var(--ink-soft); min-height: 1.4em; }
+#leave-room { align-self: center; }
+
+.vs-bar { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.vs-status { margin: 0; text-align: center; font-size: 15px; line-height: 1.4; color: var(--ink); }
+.vs-status .warn { display: block; color: var(--danger); font-weight: 700; }
+.vs-actions { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+.tabs { display: flex; gap: 6px; background: rgba(255, 255, 255, 0.5); padding: 4px; border-radius: 14px; }
+.tab {
+  flex: 1; border: 0; border-radius: 10px; padding: 8px 6px; background: transparent;
+  font-weight: 700; font-size: 14px; color: var(--ink-soft);
+}
+.tab.on { background: #fff; color: var(--ink); box-shadow: 0 2px 6px rgba(43, 42, 74, 0.1); }
+.count.pending { background: transparent; box-shadow: inset 0 0 0 2px #dcd9ee; color: #b3b0cc; animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.4; } }
+.code-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--ink); color: #fff; border-radius: 16px; padding: 8px 12px; font-weight: 700; font-size: 15px;
+}
+.code-card .tile { background: rgba(255, 255, 255, 0.14); color: #fff; box-shadow: none; }

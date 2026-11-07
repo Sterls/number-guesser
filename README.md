@@ -18,9 +18,41 @@ as "this dot is about this digit", which is not how the feedback works.
 - **Daily code:** the same 4-digit code for everyone each day (one try per
   player). Share your result (one `🟢1 🟡2` line per guess).
 - **Practice:** as many games as you like, with 3, 4 or 5 digits (Settings).
+- **⚔️ Play a friend:** see below.
 - **Notes row:** tap a digit to mark it ✕ (out), again for ✓ (in), again to clear.
 - **Give up** (flag button) shows the code. It counts as a loss.
 - Progress is saved on the phone. Works offline once opened.
+
+## Playing a friend
+
+1. Tap **⚔️ Play a friend → Create room** (pick 3, 4 or 5 digits).
+2. Tap **Send invite** and send the link to your friend (or tell them the
+   5-letter room code to type under **Join a friend's room**).
+3. When they join, you each set a secret code for the other and tap **Lock in**.
+4. Then you both guess at the same time. **Fewest guesses wins**; if it's
+   the same number, whoever made their winning guess faster wins. Giving
+   up loses. Tap **Rematch** to play again in the same room.
+
+You can switch between **Your guesses** and **their guesses** at your code
+while you play. Closing the app doesn't drop you: open it again and it
+rejoins the room.
+
+**Fair play:** your code never leaves your phone during the game. Your phone
+scores your friend's guesses and sends back only the two numbers. When you
+lock in, your phone sends a fingerprint (SHA-256 hash) of your code; at the
+end both codes are revealed and checked against the fingerprint and every
+bit of feedback, so changing your code or giving wrong feedback shows up
+as a warning.
+
+Rooms use [Supabase](https://supabase.com) Realtime: the same free project as
+Whoosh Blocks (`js/config.js`), only its live connection, no database tables,
+so there's nothing to set up. Nothing is stored on the server; a room
+disappears when both players leave. Room names start with `vault-` so they
+never mix with Whoosh Blocks races. Clear `js/config.js` to hide the button.
+
+To test two players without Supabase, open the game in two tabs of one
+browser with `?localroom=a` and `?localroom=b` in the address (each tab gets
+its own save).
 
 ## Players and stats
 
@@ -37,6 +69,7 @@ works these out from them, for one code length or all:
   **first two guesses together** (e.g. `1234 → 5678 ×7`), top 3 of each
 - **sharpness**: how often a guess (after the first) could still have been the
   code given the feedback so far
+- record against friends (won / lost / drawn)
 - recent games, and an **All players** table to compare everyone
 
 Stats are calculated from the stored games (`js/stats.js`), so changing a
@@ -46,6 +79,10 @@ formula re-counts every past game.
 
 - `js/game.js`: the rules (scoring, daily code, possible codes). No screen code.
 - `js/stats.js`: player stats from the list of finished games.
+- `js/pvp.js`: rules for playing a friend (who wins, fingerprint checks).
+- `js/room-net.js`: the live room connection (Supabase Realtime, or a
+  BroadcastChannel with `?localroom`).
+- `vendor/supabase.js`: a local copy of the Supabase library (MIT).
 - `js/storage.js`: players, games and settings in `localStorage`.
 - `js/main.js`: screens and controls.
 - `sw.js`: offline copy and the "new version ready" bar.
@@ -54,7 +91,7 @@ formula re-counts every past game.
 
 ```bash
 npm start   # serves the game at http://localhost:8080
-npm test    # rules, stats, syntax and version checks
+npm test    # rules, stats, play-a-friend, syntax and version checks
 ```
 
 After changing any file listed in `sw.js`, run `npm run stamp` so installed

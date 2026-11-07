@@ -69,3 +69,11 @@ test('the result line explains the counts in words', async () => {
   assert.equal(explain('0472', score('0472', '0472')), '0472: all 4 digits in the right spot!');
   assert.equal(explain('0123', score('0472', '0123')), '0123: 1 digit in the right spot, 1 in the code but in the wrong spot, 2 not in the code.');
 });
+
+test('possible codes from feedback alone match the count from the secret', async () => {
+  const { remainingFrom } = await import('../js/game.js');
+  const secret = '0472', guesses = ['1234', '5678', '4502'];
+  const feedback = guesses.map((g) => score(secret, g));
+  assert.equal(remainingFrom(4, guesses, feedback), remaining(secret, guesses));
+  assert.equal(remainingFrom(4, guesses, [feedback[0], feedback[1]]), remaining(secret, guesses.slice(0, 2)));
+});
