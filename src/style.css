@@ -178,7 +178,7 @@ input:focus { border-color: var(--brass); }
   #home .btn { min-height: 50px; font-size: 18px; }
   #home .btn.big { min-height: 56px; font-size: 20px; }
 }
-@media (max-height: 640px) { #home .logo { display: none; } }
+@media (max-height: 600px) { #home .logo { display: none; } }
 
 /* ---------- first-time name ---------- */
 
@@ -537,3 +537,5 @@ h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); text-transform: u
 .account-text small { font-size: 13px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-go { font-size: 28px; color: var(--ink-faint); }
 .setting .chips { flex-wrap: nowrap; flex-shrink: 0; }
+.guesses .players-li, .guesses .round-note { list-style: none; }
+.guesses .round-note { text-align: center; font-size: 13px; color: var(--ink-soft); margin-top: 4px; }

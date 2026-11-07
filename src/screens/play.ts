@@ -34,7 +34,7 @@ function serverController(start: ServerGame): Controller {
   const rows = (): Row[] => g.guesses.map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
   return {
     title: () => (g.mode === 'daily' ? `Daily #${dailyNumber(g.day || todayKey())}` : `Single player · ${g.length} digits`),
-    sub: () => (g.mode === 'daily' ? 'Same code for everyone today' : ''),
+    sub: () => (g.mode === 'daily' ? 'Same code for everyone' : ''),
     length: () => g.length,
     notes: () => notes,
     saveNotes: save,

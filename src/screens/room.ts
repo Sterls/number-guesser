@@ -351,7 +351,7 @@ function roomController(): Controller {
     list(list, justGuessed) {
       if (!room) { list.innerHTML = ''; return null; }
       if (tab === 'players') {
-        list.innerHTML = `<li class="empty">Everyone's guesses are shown when the round ends.</li><li><ul class="room-players">${playersHtml(roundPlayers(), false)}</ul></li>`;
+        list.innerHTML = `<li class="players-li"><ul class="room-players">${playersHtml(roundPlayers(), false)}</ul></li><li class="round-note">Everyone's guesses are shown when the round ends.</li>`;
         return null;
       }
       const rows: Row[] = (room.mine?.guesses ?? []).map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));

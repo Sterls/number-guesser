@@ -1,7 +1,7 @@
 // Start-up: account, then the first screen.
 
 import './style.css';
-import { show, offerUpdate, type Screen } from './app';
+import { show, offerUpdate, refresh, screen, type Screen } from './app';
 import { $, on, toast } from './ui/dom';
 import { data, migrate, save } from './store';
 import { configured, finishSwitch, startSession } from './net/supabase';
@@ -46,8 +46,8 @@ async function init() {
     }
     if (await finishSwitch((t) => api.merge(t))) toast('Signed in with Google.');
     await loadMe();
-    void refreshHistory();
-    void loadStreak();
+    // History and streak arrive after the first screen: redraw it when they do.
+    void Promise.all([refreshHistory(), loadStreak()]).then(() => { if (screen() === 'home' || screen() === 'stats') refresh(); });
   }
   $('splash').classList.add('hidden');
   if (problem) toast(problem, 6000);

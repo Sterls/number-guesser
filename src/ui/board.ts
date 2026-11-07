@@ -93,7 +93,8 @@ export function renderGame(justGuessed = false) {
   $('guess-head-label').innerHTML = head ?? 'Your guess';
   ctl.onHead?.($('guess-head-label'));
   if (rows?.length && list.querySelector('.guess-row[data-i]:not(.theirs)')) showExplanation(rows.length - 1);
-  list.scrollTop = list.scrollHeight;
+  // Guesses: show the newest. Anything else (players, instructions): from the top.
+  list.scrollTop = rows?.length ? list.scrollHeight : 0;
 
   const panel = ctl.panel();
   $('vs-panel').innerHTML = panel;
