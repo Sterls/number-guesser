@@ -1,5 +1,5 @@
 {
-  "name": "code-crack",
+  "name": "number-guesser",
   "private": true,
   "type": "module",
   "scripts": {

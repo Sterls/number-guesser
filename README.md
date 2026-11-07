@@ -1,9 +1,9 @@
-# Code Crack
+# Safecracker
 
 A number code-breaking game with **no ads, no tracking and no accounts**.
 It's the classic "bulls and cows" game, with friendlier names.
 
-There's a secret code of 4 different digits (like `0472`). After each guess
+The safe has a secret code of 4 different digits (like `0472`). After each guess
 you get pegs:
 
 - 🟢 **Green:** right digit, **right spot**

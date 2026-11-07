@@ -1,6 +1,6 @@
 // Players, their finished games and settings, saved on the phone only.
 
-const KEY = 'code-crack-save-v1';
+const KEY = 'safecracker-save-v1';
 
 const defaults = () => ({
   players: [], // { id, name, created, games: [], current: null | unfinished game }

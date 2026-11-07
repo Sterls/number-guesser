@@ -54,7 +54,7 @@ export function dailyNumber(dateKey) {
 }
 
 export function dailySecret(dateKey, length = DAILY_LENGTH) {
-  return makeSecret(length, rng(hashString(`code-crack:${dateKey}:${length}`)));
+  return makeSecret(length, rng(hashString(`safecracker:${dateKey}:${length}`)));
 }
 
 export function score(secret, guess) {

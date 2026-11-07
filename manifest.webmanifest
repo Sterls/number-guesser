@@ -1,6 +1,6 @@
 {
-  "name": "Code Crack",
-  "short_name": "Code Crack",
+  "name": "Safecracker",
+  "short_name": "Safecracker",
   "description": "Guess the secret number code. Green: right digit, right spot. Yellow: right digit, wrong spot.",
   "id": "./",
   "start_url": "./",
