@@ -451,3 +451,13 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); text-transform: u
 .board-join { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; text-align: center; }
 .board-join p { margin: 0; }
 .board-join .btn { align-self: center; }
+
+/* Working… */
+.spinner {
+  display: inline-block; width: 1em; height: 1em; margin-right: 8px; vertical-align: -0.12em;
+  border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn.busy { opacity: 0.8; }
+.board-table.loading { opacity: 0.45; transition: opacity 0.2s; }

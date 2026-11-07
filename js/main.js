@@ -1006,18 +1006,21 @@ async function renderBoard() {
 
   const p = player();
   const seq = ++boardSeq;
-  $('board-msg').textContent = 'Loading…';
+  $('board-msg').innerHTML = '<span class="spinner" aria-hidden="true"></span>Loading…';
+  $('board-table').classList.add('loading');
   let res;
   try {
     res = await lb.fetchBoard(boardLength, boardOrder, p?.board?.secret);
   } catch {
     if (seq === boardSeq) {
+      $('board-table').classList.remove('loading');
       $('board-table').innerHTML = '';
       $('board-msg').textContent = "Couldn't load the leaderboard. Check your internet and try again.";
     }
     return;
   }
   if (seq !== boardSeq || screen !== 'board') return;
+  $('board-table').classList.remove('loading');
 
   const key = (col) => (col === boardOrder ? ' sorted' : '');
   const row = (r) => {
@@ -1065,12 +1068,15 @@ function renderBoardJoin() {
       <button id="board-remove" class="btn ghost danger-text">Remove ${name}</button>`;
     $('board-remove').onclick = async () => {
       if (!await ask(`Remove ${p.name} from the leaderboard?`, { yes: 'Remove' })) return;
+      const done = busy($('board-remove'), 'Removing…');
       try {
         await lb.remove(p.board.secret);
         delete p.board;
         persist();
+        toast(`${p.name} has been removed from the leaderboard.`);
         renderBoard();
       } catch {
+        done();
         toast("Couldn't reach the leaderboard. Try again later.");
       }
     };
@@ -1078,24 +1084,42 @@ function renderBoardJoin() {
     box.innerHTML = `<p><b>Put ${name} on the leaderboard?</b></p>
       <p class="fine">Shares ${name}'s name, games played and guesses. Please don't use your real name.</p>
       <button id="board-join-btn" class="btn">Join as ${name}</button>`;
-    $('board-join-btn').onclick = () => joinBoard(p);
+    $('board-join-btn').onclick = () => joinBoard(p, $('board-join-btn'));
   }
 }
 
-async function joinBoard(p) {
+// Show that a button is working: spinner, new label, can't be tapped again.
+// Returns a function that puts the button back (for when it fails).
+function busy(button, label) {
+  const old = button.innerHTML;
+  button.disabled = true;
+  button.classList.add('busy');
+  button.innerHTML = `<span class="spinner" aria-hidden="true"></span>${label}`;
+  return () => {
+    button.disabled = false;
+    button.classList.remove('busy');
+    button.innerHTML = old;
+  };
+}
+
+async function joinBoard(p, button) {
   const problem = boardNameProblem(p.name);
   if (problem) return toast(`${problem} Rename ${p.name} on the Players screen.`);
   const secret = newId();
+  const done = busy(button, 'Joining…');
   try {
     await lb.submit(secret, p.name, p.games, LENGTHS);
   } catch (err) {
+    done();
     return toast(err.nameRejected
       ? `That name isn't allowed. Rename ${p.name} on the Players screen.`
       : "Couldn't reach the leaderboard. Try again later.");
   }
   p.board = { secret };
   persist();
-  if (!p.games.some((g) => g.won)) toast(`${p.name} will show up after cracking a code.`);
+  toast(p.games.some((g) => g.won)
+    ? `${p.name} is on the leaderboard!`
+    : `${p.name} joined! They'll show up after cracking a code.`);
   renderBoard();
 }
 

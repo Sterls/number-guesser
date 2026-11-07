@@ -38,16 +38,16 @@ export function totalsFor(games, length) {
   };
 }
 
-// Send a player's totals for each code length they've played.
+// Send a player's totals for each code length they've played (all at once).
 export async function submit(secret, name, games, lengths) {
-  for (const length of lengths) {
+  await Promise.all(lengths.map((length) => {
     const t = totalsFor(games, length);
-    if (!t.played) continue;
-    await rpc('vault_submit', {
+    if (!t.played) return null;
+    return rpc('vault_submit', {
       p_secret: secret, p_name: name, p_length: length,
       p_played: t.played, p_cracked: t.cracked, p_guesses: t.guesses, p_best: t.best,
     });
-  }
+  }));
 }
 
 // { top: [{ rank, name, played, cracked, avg, best, me }], me: row | null }
