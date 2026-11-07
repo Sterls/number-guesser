@@ -243,8 +243,16 @@ function showExplanation(i) {
       text += ` ${n.toLocaleString()} possible code${n === 1 ? '' : 's'} left.`;
     }
   }
-  $('feedback-msg').textContent = text;
-  document.querySelectorAll('.guess-row').forEach((row, j) => row.classList.toggle('picked', j === i));
+  // Shown in the list, under the guess it explains, so it scrolls with the guesses.
+  const list = $('guesses');
+  list.querySelector('.explain')?.remove();
+  const rows = list.querySelectorAll('.guess-row');
+  rows.forEach((row, j) => row.classList.toggle('picked', j === i));
+  const li = document.createElement('li');
+  li.className = 'explain';
+  li.setAttribute('role', 'status');
+  li.textContent = text;
+  rows[i]?.after(li);
 }
 
 function tilesHtml(code) {
@@ -252,7 +260,8 @@ function tilesHtml(code) {
 }
 
 function renderGame(justGuessed = false) {
-  $('vs-bar').classList.add('hidden');
+  $('vs-status').classList.add('hidden');
+  $('vs-panel').classList.add('hidden');
   $('guess-head-label').textContent = 'Your guess';
   $('giveup-btn').classList.remove('hidden');
   $('entry').classList.remove('hidden');
@@ -271,7 +280,6 @@ function renderGame(justGuessed = false) {
     list.appendChild(li);
   });
   $('guess-head').classList.toggle('hidden', !game.guesses.length);
-  $('feedback-msg').textContent = '';
   if (!game.guesses.length) {
     list.innerHTML = `<li class="empty">Type any ${game.length} different digits to start.<br>After each guess you'll see how many of your digits are in the <b class="t-exact">right spot</b> and how many are in the code but in the <b class="t-close">wrong spot</b>.</li>`;
   } else showExplanation(game.guesses.length - 1);
@@ -845,40 +853,36 @@ function renderVersusGame(justGuessed = false) {
   const playing = vs.phase === 'play' || vs.phase === 'done';
   $('game-title').textContent = `vs ${oppName()}`;
   const hideTheirs = sameCode() && vs.phase !== 'done'; // their guesses would give the code away
-  $('vs-bar').classList.remove('hidden');
   $('giveup-btn').classList.toggle('hidden', !(vs.phase === 'play' && !myDone()));
   $('entry').classList.toggle('hidden', !entryOpen());
-  $('feedback-msg').textContent = '';
 
-  // Status line
-  const offline = !o.present ? ` <span class="warn">${name} is offline</span>` : '';
-  let status = '';
-  if (vs.phase === 'waiting') status = `Waiting for ${name}…`;
-  else if (vs.phase === 'setcode' && sameCode()) status = `🎯 Same code. Waiting for <b>${name}</b>…`;
-  else if (vs.phase === 'setcode') status = `Set a secret code for <b>${name}</b> to crack.`;
-  else if (vs.phase === 'locked') status = `Waiting for <b>${name}</b> to set their code…`;
+  // One short status line under the title; anything longer goes in the panel at the bottom.
+  const mine = crackedAt(vs.feedback, vs.length), theirs = crackedAt(vs.answers, vs.length);
+  let sub = '';
+  if (vs.phase === 'waiting') sub = `Waiting for ${name}…`;
+  else if (vs.phase === 'setcode') sub = sameCode() ? `🎯 Same code · waiting for ${name}…` : 'Set your secret code';
+  else if (vs.phase === 'locked') sub = `🔒 Locked in · waiting for ${name}…`;
+  else if (vs.phase === 'done') sub = `<b>${{ win: 'You win! 🏆', lose: `${name} wins`, draw: "It's a draw" }[vs.result.result]}</b>`;
   else {
-    const mine = crackedAt(vs.feedback, vs.length), theirs = crackedAt(vs.answers, vs.length);
-    const me = mine ? `You cracked it in ${mine}` : vs.gaveUp ? 'You gave up' : `You: ${plural(vs.guesses.length, 'guess')}`;
-    const them = theirs ? `${name} cracked it in ${theirs}` : o.gaveUp ? `${name} gave up` : `${name}: ${plural(o.guesses.length, 'guess')}`;
-    status = `${me} · ${them}`;
-    if (vs.phase === 'done') {
-      const word = { win: 'You win!', lose: `${name} wins.`, draw: "It's a draw." }[vs.result.result];
-      status = `<b>${word}</b> ${status}${o.round > vs.round ? `<br><b>${name} wants a rematch!</b>` : ''}`
-        + '<span class="vs-actions"><button class="btn small" data-act="rematch">Rematch</button><button class="btn small secondary" data-act="leave">Leave</button></span>';
-    } else if (mine || vs.gaveUp) status += `<br>Waiting for ${name} to finish…`;
+    const side = (who, n, cracked, gaveUp) => `${who} ${cracked ? `✓ ${cracked}` : gaveUp ? 'gave up' : n}`;
+    sub = `${side('You', vs.guesses.length, mine, vs.gaveUp)} · ${side(name, o.guesses.length, theirs, o.gaveUp)} <small>guesses</small>`;
   }
-  $('vs-status').innerHTML = status + (vs.phase !== 'done' ? offline : '');
-  $('vs-status').querySelector('[data-act="rematch"]')?.addEventListener('click', rematch);
-  $('vs-status').querySelector('[data-act="leave"]')?.addEventListener('click', () => leaveRoom());
+  if (!o.present && vs.phase !== 'done') sub += ` · <span class="warn">${name} offline</span>`;
+  $('vs-status').innerHTML = sub;
+  $('vs-status').classList.remove('hidden');
 
-  // Tabs
-  const tabs = $('vs-tabs');
-  tabs.classList.toggle('hidden', !playing);
-  tabs.innerHTML = playing ? `
-    <button class="tab${vsTab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">Your guesses</button>
-    <button class="tab${vsTab === 'theirs' ? ' on' : ''}" data-tab="theirs" role="tab">${name}'s guesses (${o.guesses.length})</button>` : '';
-  tabs.querySelectorAll('.tab').forEach((t) => { t.onclick = () => { vsTab = t.dataset.tab; renderVersusGame(); }; });
+  let panel = '';
+  if (vs.phase === 'done') {
+    panel = `<p><b>${{ win: 'You win!', lose: `${name} wins.`, draw: "It's a draw." }[vs.result.result]}</b> ${esc(vs.result.reason)}</p>`
+      + (o.round > vs.round ? `<p><b>${name} wants a rematch!</b></p>` : '')
+      + '<div class="vs-actions"><button class="btn small" data-act="rematch">Rematch</button><button class="btn small secondary" data-act="leave">Leave</button></div>';
+  } else if (vs.phase === 'play' && (mine || vs.gaveUp)) {
+    panel = `<p>${mine ? `You cracked it in ${mine}!` : 'You gave up.'} Waiting for ${name} to finish…</p>`;
+  }
+  $('vs-panel').innerHTML = panel;
+  $('vs-panel').classList.toggle('hidden', !panel);
+  $('vs-panel').querySelector('[data-act="rematch"]')?.addEventListener('click', rematch);
+  $('vs-panel').querySelector('[data-act="leave"]')?.addEventListener('click', () => leaveRoom());
 
   // List
   const list = $('guesses');
@@ -906,8 +910,11 @@ function renderVersusGame(justGuessed = false) {
     list.querySelectorAll('.guess-row').forEach((row) => { row.onclick = () => showExplanation(Number(row.dataset.i)); });
     if (vs.guesses.length) showExplanation(vs.guesses.length - 1);
   }
-  $('guess-head').classList.toggle('hidden', !rows.length);
-  $('guess-head-label').textContent = vsTab === 'theirs' ? `${oppName()}'s guess` : 'Your guess';
+  // The column heading doubles as the switch between your guesses and theirs.
+  $('guess-head').classList.toggle('hidden', !playing);
+  $('guess-head-label').innerHTML = `<span class="who-switch" role="tablist">
+    <button class="who${vsTab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">You</button><button class="who${vsTab === 'theirs' ? ' on' : ''}" data-tab="theirs" role="tab">${name} <small>${o.guesses.length}</small></button></span>`;
+  $('guess-head-label').querySelectorAll('.who').forEach((t) => { t.onclick = () => { vsTab = t.dataset.tab; renderVersusGame(); }; });
   list.scrollTop = list.scrollHeight;
   if (entryOpen()) renderEntry();
 }

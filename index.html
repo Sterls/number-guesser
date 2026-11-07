@@ -126,25 +126,24 @@
   <section id="game" class="screen hidden">
     <div class="bar">
       <button class="icon-btn back" aria-label="Back to menu"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <h2 id="game-title">Daily</h2>
+      <div class="bar-title">
+        <h2 id="game-title">Daily</h2>
+        <p id="vs-status" class="vs-sub hidden" role="status"></p>
+      </div>
       <button id="giveup-btn" class="icon-btn" aria-label="Give up"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
     </div>
-    <div id="vs-bar" class="vs-bar hidden">
-      <p id="vs-status" class="vs-status" role="status"></p>
-      <div id="vs-tabs" class="tabs" role="tablist"></div>
-    </div>
-    <div id="guess-head" class="guess-head grid hidden" aria-hidden="true">
+    <div id="guess-head" class="guess-head grid hidden">
       <span></span><span id="guess-head-label">Your guess</span>
       <span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span>
     </div>
     <ol id="guesses" class="guesses"></ol>
     <div id="entry" class="entry">
       <div id="slots" class="slots"></div>
-      <p id="feedback-msg" class="feedback-msg" role="status" aria-live="polite"></p>
       <p id="entry-msg" class="entry-msg" role="status"></p>
       <div id="notes" class="notes" aria-label="Notes: tap a digit to mark it out or in"></div>
       <div id="keypad" class="keypad"></div>
     </div>
+    <div id="vs-panel" class="vs-panel hidden" role="status"></div>
   </section>
 
   <!-- Stats -->
