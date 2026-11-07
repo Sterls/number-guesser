@@ -35,20 +35,36 @@ create table if not exists public.vault_daily (
   secret text not null
 );
 
+-- Version 3 turned two-player rooms into lobbies: drop the old shape.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'vault_rooms' and column_name = 'guest') then
+    drop table public.vault_rooms cascade;
+  end if;
+end;
+$$;
+drop function if exists public.vault_room_new_round(public.vault_rooms);
+drop function if exists public.vault_room_create(text, int);
+drop function if exists public.vault_room_set_code(uuid, text);
+drop function if exists public.vault_room_rematch(uuid);
+
 create table if not exists public.vault_rooms (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   host uuid not null references auth.users (id) on delete cascade,
-  guest uuid references auth.users (id) on delete set null,
-  style text not null check (style in ('own', 'same')),
   length int not null check (length between 3 and 5),
-  round int not null default 1,
+  round int not null default 0,                    -- 0 until the first round starts
+  playing boolean not null default false,          -- a round is going on
   round_started_at timestamptz,
-  host_code text,   -- 'own' rooms: the code the host set for the guest this round
-  guest_code text,  -- ... and the code the guest set for the host
-  host_rematch boolean not null default false,
-  guest_rematch boolean not null default false,
   updated_at timestamptz not null default now()
+);
+
+create table if not exists public.vault_room_players (
+  room_id uuid not null references public.vault_rooms (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (room_id, user_id)
 );
 
 create table if not exists public.vault_games (
@@ -60,15 +76,23 @@ create table if not exists public.vault_games (
   day date,                                         -- daily games
   room_id uuid references public.vault_rooms (id) on delete set null,
   round int,                                        -- room games
-  opponent text,                                    -- room games: the other player's name
+  opponent text,                                    -- room games: the other players' names
   guesses text[] not null default '{}',
   guess_ms int[] not null default '{}',             -- when each guess was made, ms after the start
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   cracked boolean not null default false,
   gave_up boolean not null default false,
-  result text check (result in ('win', 'lose', 'draw'))  -- room games
+  result text check (result in ('win', 'lose', 'draw')),  -- room games: 1st (or tied 1st) / not
+  place int                                               -- room games: 1 = first
 );
+alter table public.vault_games add column if not exists place int;
+-- (Re)link room games to rooms: rooms are dropped and recreated when their shape changes.
+alter table public.vault_games drop constraint if exists vault_games_room_id_fkey;
+update public.vault_games set room_id = null
+  where room_id is not null and room_id not in (select id from public.vault_rooms);  -- games from removed rooms stay
+alter table public.vault_games add constraint vault_games_room_id_fkey
+  foreign key (room_id) references public.vault_rooms (id) on delete set null;
 create unique index if not exists vault_games_one_daily on public.vault_games (user_id, day) where mode = 'daily';
 create index if not exists vault_games_user on public.vault_games (user_id, started_at);
 create index if not exists vault_games_room on public.vault_games (room_id, round);
@@ -89,12 +113,13 @@ create table if not exists public.vault_merge_tokens (
 alter table public.vault_profiles enable row level security;
 alter table public.vault_daily enable row level security;
 alter table public.vault_rooms enable row level security;
+alter table public.vault_room_players enable row level security;
 alter table public.vault_games enable row level security;
 alter table public.vault_reports enable row level security;
 alter table public.vault_merge_tokens enable row level security;
 -- Supabase grants new tables to anon/authenticated by default; take that back
 -- too, so the tables really are only reachable through the functions.
-revoke all on public.vault_profiles, public.vault_daily, public.vault_rooms, public.vault_games,
+revoke all on public.vault_profiles, public.vault_daily, public.vault_rooms, public.vault_room_players, public.vault_games,
   public.vault_reports, public.vault_merge_tokens from anon, authenticated;
 
 -- ---------- rules ----------
@@ -197,7 +222,7 @@ stable
 as $$
   select json_build_object(
     'id', g.id, 'mode', g.mode, 'length', g.length, 'day', g.day, 'round', g.round,
-    'opponent', g.opponent, 'result', g.result,
+    'opponent', g.opponent, 'result', g.result, 'place', g.place,
     'guesses', coalesce((
       select json_agg(json_build_object('guess', x.guess, 'exact', s[1], 'close', s[2], 'ms', x.ms) order by x.n)
       from unnest(g.guesses, g.guess_ms) with ordinality as x(guess, ms, n),
@@ -205,7 +230,11 @@ as $$
     'cracked', g.cracked, 'gave_up', g.gave_up,
     'finished', g.finished_at is not null,
     'started_at', g.started_at, 'finished_at', g.finished_at,
-    'secret', case when g.finished_at is not null or reveal then g.secret end);
+    -- The code once the game is over, but in a room only once the whole round
+    -- is over (so someone who gives up can't pass it on).
+    'secret', case
+      when g.room_id is not null and exists (select 1 from vault_rooms r where r.id = g.room_id and r.round = g.round and r.playing) then null
+      when g.finished_at is not null or reveal then g.secret end);
 $$;
 
 -- ---------- me ----------
@@ -286,8 +315,8 @@ declare
   me uuid := vault_me_id();
 begin
   delete from vault_games where user_id = me;
-  delete from vault_rooms where host = me;
-  update vault_rooms set guest = null where guest = me;
+  delete from vault_room_players where user_id = me;
+  delete from vault_rooms r where r.host = me;
   delete from vault_profiles where user_id = me;
   delete from vault_merge_tokens where user_id = me;
 end;
@@ -330,7 +359,9 @@ begin
     and exists (select 1 from vault_games h where h.user_id = me and h.mode = 'daily' and h.day = g.day);
   update vault_games set user_id = me where user_id = old;
   update vault_rooms set host = me where host = old;
-  update vault_rooms set guest = me where guest = old;
+  update vault_room_players set user_id = me where user_id = old
+    and not exists (select 1 from vault_room_players q where q.room_id = vault_room_players.room_id and q.user_id = me);
+  delete from vault_room_players where user_id = old;
   perform vault_me();
   update vault_profiles p set
     name = coalesce(p.name, o.name),
@@ -466,28 +497,25 @@ end;
 $$;
 
 -- ---------- rooms ----------
--- Two players. 'own': each sets a code for the other. 'same': both crack
--- one random code. Fewest guesses wins; the same number goes to whoever made
--- their cracking guess sooner after the round started; giving up (or
--- leaving) loses.
+-- Lobbies of up to 8 players. The host starts a round; everyone in the room
+-- cracks the same random code. Players are ranked by fewest guesses, then
+-- by who made their cracking guess soonest after the start; giving up (or
+-- leaving) puts you below everyone who cracked it. The round ends when
+-- everyone has finished, or when the host ends it. Players who join during
+-- a round play from the next one.
 
-create or replace function public.vault_room_new_round(r public.vault_rooms)
-returns void
-language plpgsql
+create or replace function public.vault_room_names_except(p_room uuid, p_user uuid)
+returns text
+language sql
+stable
 security definer
 set search_path = public
 as $$
-declare
-  same_code text := vault_make_code(r.length);
-begin
-  update vault_rooms set round_started_at = now(), updated_at = now() where id = r.id;
-  insert into vault_games (user_id, mode, length, secret, room_id, round, opponent, started_at) values
-    (r.host, 'room', r.length, case when r.style = 'same' then same_code else r.guest_code end, r.id, r.round, vault_name_of(r.guest), now()),
-    (r.guest, 'room', r.length, case when r.style = 'same' then same_code else r.host_code end, r.id, r.round, vault_name_of(r.host), now());
-end;
+  select left(coalesce(string_agg(vault_name_of(user_id), ', ' order by joined_at), ''), 200)
+  from vault_room_players where room_id = p_room and user_id <> p_user;
 $$;
 
--- Decide the round if it can be decided, and finish both games when it is.
+-- Rank a finished round and open the lobby again (once everyone is done).
 create or replace function public.vault_room_settle(p_room uuid)
 returns void
 language plpgsql
@@ -496,45 +524,35 @@ set search_path = public
 as $$
 declare
   r vault_rooms%rowtype;
-  h vault_games%rowtype;
-  gst vault_games%rowtype;
-  hn int; gn int;          -- guesses to crack, or null
-  hm int; gm int;          -- answered guesses (all are answered at once here)
-  res text;                -- host's result
+  firsts int;
 begin
-  select * into r from vault_rooms where id = p_room;
-  select * into h from vault_games where room_id = p_room and round = r.round and user_id = r.host;
-  select * into gst from vault_games where room_id = p_room and round = r.round and user_id = r.guest;
-  if h.id is null or gst.id is null or h.result is not null then
+  select * into r from vault_rooms where id = p_room for update;
+  if not found or not r.playing then
     return;
   end if;
-  hn := case when h.cracked then array_length(h.guesses, 1) end;
-  gn := case when gst.cracked then array_length(gst.guesses, 1) end;
-  hm := coalesce(array_length(h.guesses, 1), 0);
-  gm := coalesce(array_length(gst.guesses, 1), 0);
-
-  if h.gave_up and gst.gave_up then res := 'draw';
-  elsif h.gave_up then res := 'lose';
-  elsif gst.gave_up then res := 'win';
-  elsif hn is not null and gn is not null then
-    if hn <> gn then res := case when hn < gn then 'win' else 'lose' end;
-    elsif h.guess_ms[hn] <> gst.guess_ms[gn] then res := case when h.guess_ms[hn] < gst.guess_ms[gn] then 'win' else 'lose' end;
-    else res := 'draw';
-    end if;
-  elsif hn is not null and gm >= hn then res := 'win';
-  elsif gn is not null and hm >= gn then res := 'lose';
+  if exists (select 1 from vault_games where room_id = r.id and round = r.round and finished_at is null) then
+    return;
   end if;
-
-  if res is not null then
-    update vault_games set result = res, finished_at = coalesce(finished_at, now()) where id = h.id;
-    update vault_games set result = case res when 'win' then 'lose' when 'lose' then 'win' else 'draw' end,
-      finished_at = coalesce(finished_at, now()) where id = gst.id;
-    update vault_rooms set updated_at = now() where id = r.id;
-  end if;
+  with ranked as (
+    select id, cracked,
+           rank() over (order by cracked desc,
+                                 case when cracked then array_length(guesses, 1) end asc nulls last,
+                                 case when cracked then guess_ms[array_length(guesses, 1)] end asc nulls last) as place
+    from vault_games where room_id = r.id and round = r.round
+  )
+  update vault_games g set place = ranked.place from ranked where g.id = ranked.id;
+  select count(*) into firsts from vault_games where room_id = r.id and round = r.round and place = 1 and cracked;
+  update vault_games set result = case
+      when place = 1 and cracked and firsts > 1 then 'draw'
+      when place = 1 and cracked then 'win'
+      else 'lose' end
+    where room_id = r.id and round = r.round;
+  update vault_rooms set playing = false, updated_at = now() where id = r.id;
 end;
 $$;
 
--- Everything one player may see about the room right now.
+-- Everything one player may see about the room right now. Other players'
+-- guesses are only shown once the round is over, so nobody can copy.
 create or replace function public.vault_room_state(p_room uuid)
 returns json
 language plpgsql
@@ -544,55 +562,50 @@ as $$
 declare
   me uuid := vault_me_id();
   r vault_rooms%rowtype;
-  i_host boolean;
   mine vault_games%rowtype;
-  theirs vault_games%rowtype;
-  other uuid;
-  phase text;
-  done boolean;
-  show_theirs boolean;
 begin
   select * into r from vault_rooms where id = p_room;
-  if not found or (me <> r.host and me is distinct from r.guest) then
+  if not found or not exists (select 1 from vault_room_players where room_id = r.id and user_id = me) then
     return null;
   end if;
-  i_host := me = r.host;
-  other := case when i_host then r.guest else r.host end;
   select * into mine from vault_games where room_id = r.id and round = r.round and user_id = me;
-  if other is not null then
-    select * into theirs from vault_games where room_id = r.id and round = r.round and user_id = other;
-  end if;
-  done := mine.result is not null;
-  phase := case
-    when mine.id is not null then case when done then 'done' else 'play' end
-    when other is null then 'waiting'
-    else 'setcode' end;
-  -- Their guesses: at my code in 'own' rooms (I know it anyway); in 'same'
-  -- rooms only once the round is over, so they can't be copied.
-  show_theirs := theirs.id is not null and (r.style = 'own' or done);
   return json_build_object(
-    'id', r.id, 'code', r.code, 'style', r.style, 'length', r.length, 'round', r.round,
-    'host', i_host, 'phase', phase,
-    'me_name', vault_name_of(me),
-    'them_name', case when other is not null then vault_name_of(other) end,
-    'them_left', other is null and mine.id is not null,
-    'opponent', coalesce(mine.opponent, case when other is not null then vault_name_of(other) end),
-    'my_code', case when r.style = 'own' then case when i_host then r.host_code else r.guest_code end end,
-    'their_code_set', case when i_host then r.guest_code is not null else r.host_code is not null end,
-    'mine', case when mine.id is not null then vault_game_json(mine, done) end,
-    'theirs', case when theirs.id is not null then json_build_object(
-        'count', coalesce(array_length(theirs.guesses, 1), 0),
-        'cracked', theirs.cracked, 'gave_up', theirs.gave_up,
-        'cracked_at', case when theirs.cracked then array_length(theirs.guesses, 1) end,
-        'game', case when show_theirs then vault_game_json(theirs, done) end) end,
-    'result', mine.result,
-    'rematch', json_build_object(
-      'me', case when i_host then r.host_rematch else r.guest_rematch end,
-      'them', case when i_host then r.guest_rematch else r.host_rematch end));
+    'id', r.id, 'code', r.code, 'length', r.length, 'round', r.round,
+    'playing', r.playing, 'host', r.host = me,
+    'host_name', vault_name_of(r.host),
+    'mine', case when mine.id is not null then vault_game_json(mine, not r.playing) end,
+    'secret', case when not r.playing and r.round > 0 then
+        (select secret from vault_games where room_id = r.id and round = r.round limit 1) end,
+    -- Everyone in the room, plus anyone who played this round and has since left.
+    'players', coalesce((
+      select json_agg(x.p order by x.sort1, x.sort2, x.sort3, x.joined)
+      from (
+        select json_build_object(
+                 'name', vault_name_of(u.user_id), 'me', u.user_id = me, 'host', u.user_id = r.host,
+                 'in_room', u.in_room, 'in_round', g.id is not null,
+                 'count', coalesce(array_length(g.guesses, 1), 0),
+                 'cracked', coalesce(g.cracked, false), 'gave_up', coalesce(g.gave_up, false),
+                 'finished', g.finished_at is not null,
+                 'place', g.place,
+                 'ms', case when g.cracked then g.guess_ms[array_length(g.guesses, 1)] end,
+                 'guesses', case when g.id is not null and not r.playing then vault_game_json(g, true) -> 'guesses' end) as p,
+               coalesce(g.place, 99) as sort1,
+               case when g.cracked then array_length(g.guesses, 1) end as sort2,
+               case when g.cracked then g.guess_ms[array_length(g.guesses, 1)] end as sort3,
+               u.joined
+        from (
+          select user_id, true as in_room, joined_at as joined from vault_room_players where room_id = r.id
+          union all
+          select user_id, false, started_at from vault_games
+            where room_id = r.id and round = r.round
+              and user_id not in (select user_id from vault_room_players where room_id = r.id)
+        ) u
+        left join vault_games g on g.room_id = r.id and g.round = r.round and g.user_id = u.user_id
+      ) x), '[]'::json));
 end;
 $$;
 
-create or replace function public.vault_room_create(p_style text, p_length int)
+create or replace function public.vault_room_create(p_length int)
 returns json
 language plpgsql
 security definer
@@ -604,7 +617,7 @@ declare
   rid uuid;
 begin
   perform vault_me();
-  if p_style not in ('own', 'same') or p_length not between 3 and 5 then
+  if p_length not between 3 and 5 then
     raise exception 'bad room' using errcode = '22023';
   end if;
   if (select count(*) from vault_rooms where host = me and updated_at > now() - interval '1 day') >= 30 then
@@ -616,7 +629,8 @@ begin
                from generate_series(1, 5));
     exit when not exists (select 1 from vault_rooms where code = v_code);
   end loop;
-  insert into vault_rooms (code, host, style, length) values (v_code, me, p_style, p_length) returning id into rid;
+  insert into vault_rooms (code, host, length) values (v_code, me, p_length) returning id into rid;
+  insert into vault_room_players (room_id, user_id) values (rid, me);
   return vault_room_state(rid);
 end;
 $$;
@@ -636,25 +650,51 @@ begin
   if not found then
     raise exception 'room not found' using errcode = '22023';
   end if;
-  if me = r.host or me = r.guest then
+  if not exists (select 1 from vault_room_players where room_id = r.id and user_id = me) then
+    if (select count(*) from vault_room_players where room_id = r.id) >= 8 then
+      raise exception 'room full' using errcode = '22023';
+    end if;
+    insert into vault_room_players (room_id, user_id) values (r.id, me);
+    update vault_rooms set updated_at = now() where id = r.id;
+  end if;
+  return vault_room_state(r.id);
+end;
+$$;
+
+-- The host starts a round: a new code for everyone in the room.
+create or replace function public.vault_room_start(p_room uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := vault_me_id();
+  r vault_rooms%rowtype;
+  code text;
+begin
+  select * into r from vault_rooms where id = p_room for update;
+  if not found or r.host <> me then
+    raise exception 'only the host can start' using errcode = '22023';
+  end if;
+  if r.playing then
     return vault_room_state(r.id);
   end if;
-  if r.guest is not null then
-    raise exception 'room full' using errcode = '22023';
+  if (select count(*) from vault_room_players where room_id = r.id) < 2 then
+    raise exception 'waiting for players' using errcode = '22023';
   end if;
-  update vault_rooms set guest = me, host_code = null, guest_code = null,
-    host_rematch = false, guest_rematch = false, updated_at = now(),
-    round = case when exists (select 1 from vault_games where room_id = r.id and round = r.round) then round + 1 else round end
+  code := vault_make_code(r.length);
+  update vault_rooms set round = round + 1, playing = true, round_started_at = now(), updated_at = now()
     where id = r.id returning * into r;
-  if r.style = 'same' then
-    perform vault_room_new_round(r);
-  end if;
+  insert into vault_games (user_id, mode, length, secret, room_id, round, opponent, started_at)
+    select p.user_id, 'room', r.length, code, r.id, r.round, vault_room_names_except(r.id, p.user_id), now()
+    from vault_room_players p where p.room_id = r.id;
   return vault_room_state(r.id);
 end;
 $$;
 
--- 'own' rooms: set the code the other player will crack.
-create or replace function public.vault_room_set_code(p_room uuid, p_code text)
+-- The host ends the round early: anyone still guessing hasn't cracked it.
+create or replace function public.vault_room_end(p_room uuid)
 returns json
 language plpgsql
 security definer
@@ -664,64 +704,19 @@ declare
   me uuid := vault_me_id();
   r vault_rooms%rowtype;
 begin
-  select * into r from vault_rooms where id = p_room for update;
-  if not found or r.style <> 'own' or (me <> r.host and me is distinct from r.guest) then
-    raise exception 'room not found' using errcode = '22023';
+  select * into r from vault_rooms where id = p_room;
+  if not found or r.host <> me then
+    raise exception 'only the host can end the round' using errcode = '22023';
   end if;
-  if not vault_valid_guess(p_code, r.length) then
-    raise exception 'bad code' using errcode = '22023';
-  end if;
-  if exists (select 1 from vault_games where room_id = r.id and round = r.round) then
-    return vault_room_state(r.id);  -- already playing
-  end if;
-  if me = r.host then
-    update vault_rooms set host_code = coalesce(host_code, p_code), updated_at = now() where id = r.id returning * into r;
-  else
-    update vault_rooms set guest_code = coalesce(guest_code, p_code), updated_at = now() where id = r.id returning * into r;
-  end if;
-  if r.guest is not null and r.host_code is not null and r.guest_code is not null then
-    perform vault_room_new_round(r);
-  end if;
+  update vault_games set finished_at = now()
+    where room_id = r.id and round = r.round and finished_at is null;
+  perform vault_room_settle(r.id);
   return vault_room_state(r.id);
 end;
 $$;
 
-create or replace function public.vault_room_rematch(p_room uuid)
-returns json
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  me uuid := vault_me_id();
-  r vault_rooms%rowtype;
-begin
-  select * into r from vault_rooms where id = p_room for update;
-  if not found or (me <> r.host and me is distinct from r.guest) then
-    raise exception 'room not found' using errcode = '22023';
-  end if;
-  if not exists (select 1 from vault_games where room_id = r.id and round = r.round and user_id = me and result is not null) then
-    return vault_room_state(r.id);  -- this round isn't over
-  end if;
-  if me = r.host then
-    update vault_rooms set host_rematch = true where id = r.id returning * into r;
-  else
-    update vault_rooms set guest_rematch = true where id = r.id returning * into r;
-  end if;
-  if r.host_rematch and r.guest_rematch then
-    update vault_rooms set round = round + 1, host_code = null, guest_code = null,
-      host_rematch = false, guest_rematch = false, round_started_at = null, updated_at = now()
-      where id = r.id returning * into r;
-    if r.style = 'same' then
-      perform vault_room_new_round(r);
-    end if;
-  end if;
-  update vault_rooms set updated_at = now() where id = r.id;
-  return vault_room_state(r.id);
-end;
-$$;
-
--- Leaving mid-round counts as giving up, so the other player wins.
+-- Leaving mid-round counts as giving up. If the host leaves, the player who
+-- joined next becomes the host; the last one out closes the room.
 create or replace function public.vault_room_leave(p_room uuid)
 returns void
 language plpgsql
@@ -731,23 +726,22 @@ as $$
 declare
   me uuid := vault_me_id();
   r vault_rooms%rowtype;
+  next_host uuid;
 begin
   select * into r from vault_rooms where id = p_room for update;
-  if not found or (me <> r.host and me is distinct from r.guest) then
+  if not found then
     return;
   end if;
   update vault_games set gave_up = true, finished_at = now()
     where room_id = r.id and round = r.round and user_id = me and finished_at is null;
-  perform vault_room_settle(r.id);
-  if r.guest is null then
+  delete from vault_room_players where room_id = r.id and user_id = me;
+  select user_id into next_host from vault_room_players where room_id = r.id order by joined_at limit 1;
+  if next_host is null then
     delete from vault_rooms where id = r.id;
-  else
-    -- Whoever stays becomes the host. They still see this round's result;
-    -- the next player to join starts a new round.
-    update vault_rooms set host = case when me = r.host then r.guest else r.host end, guest = null,
-      host_code = null, guest_code = null, host_rematch = false, guest_rematch = false, updated_at = now()
-      where id = r.id;
+    return;
   end if;
+  update vault_rooms set host = case when host = me then next_host else host end, updated_at = now() where id = r.id;
+  perform vault_room_settle(r.id);
 end;
 $$;
 
@@ -882,7 +876,7 @@ begin
   foreach f in array array[
     'vault_name_ok(text)', 'vault_make_code(integer)', 'vault_valid_guess(text, integer)',
     'vault_score(text, text)', 'vault_me_id()', 'vault_name_of(uuid)',
-    'vault_game_json(public.vault_games, boolean)', 'vault_room_new_round(public.vault_rooms)',
+    'vault_game_json(public.vault_games, boolean)', 'vault_room_names_except(uuid, uuid)',
     'vault_room_settle(uuid)', 'vault_streak(uuid, date)'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;
@@ -891,8 +885,8 @@ begin
     'vault_me()', 'vault_set_name(text)', 'vault_set_board(boolean)', 'vault_history()',
     'vault_delete_me()', 'vault_merge_token()', 'vault_merge(uuid)',
     'vault_start(text, integer, date)', 'vault_game(uuid)', 'vault_guess(uuid, text)', 'vault_give_up(uuid)',
-    'vault_room_state(uuid)', 'vault_room_create(text, integer)', 'vault_room_join(text)',
-    'vault_room_set_code(uuid, text)', 'vault_room_rematch(uuid)', 'vault_room_leave(uuid)',
+    'vault_room_state(uuid)', 'vault_room_create(integer)', 'vault_room_join(text)',
+    'vault_room_start(uuid)', 'vault_room_end(uuid)', 'vault_room_leave(uuid)',
     'vault_my_streak(date)', 'vault_report(text)'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);

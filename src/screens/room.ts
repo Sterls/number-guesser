@@ -1,10 +1,11 @@
-// Playing a friend. The server holds the room: it makes or stores the codes,
-// checks every guess and decides who won. This phone asks it for the room's
-// state every few seconds, and straight away when the other phone pokes it
+// Playing friends: lobbies of up to 8 players. The server holds the room:
+// the host starts a round, everyone cracks the same random code, the server
+// checks every guess and ranks the players. This phone asks the server for
+// the room every few seconds, and straight away when another phone pokes it
 // over the live connection.
 
 import { show, register, screen, onLeave } from '../app';
-import { $, on, ask, toast, esc, plural, busy } from '../ui/dom';
+import { $, on, ask, toast, esc, plural, busy, formatTime } from '../ui/dom';
 import { feel } from '../ui/feel';
 import { confetti } from '../ui/confetti';
 import { renderGame, rowsHtml, setController, tilesHtml, controller, type Controller, type Row } from '../ui/board';
@@ -13,30 +14,23 @@ import { joinLive, type Live } from '../net/live';
 import { currentUser } from '../net/supabase';
 import { data, save, settings } from '../store';
 import { DAILY_LENGTH, LENGTHS, explain, remainingFrom } from '../lib/game';
-import type { RoomState, RoomStyle } from '../lib/types';
+import type { RoomPlayer, RoomState } from '../lib/types';
 import { addFinished } from '../account';
 import { CONFETTI } from './play';
 
 let room: RoomState | null = null;
 let live: Live | null = null;
-let liveReady = false;
-let othersOnline = 0;
 let poll: number | undefined;
-let tab: 'mine' | 'theirs' = 'mine';
-let newStyle: RoomStyle = 'own';
+let tab: 'mine' | 'players' = 'mine';
 let newLength = DAILY_LENGTH;
 let shownResultFor = '';
-let lastSeen = { mine: 0, theirs: 0 };
+let lastCounts = '';
 
-const them = () => esc(room?.them_name || room?.opponent || 'your friend');
-const themText = () => room?.them_name || room?.opponent || 'your friend';
-const myDone = () => Boolean(room?.mine && (room.mine.cracked || room.mine.gave_up || room.mine.finished));
-export const inRoom = () => Boolean(data.room);
-export const roomCode = () => data.room?.code || '';
-
-export function styleName(style: RoomStyle) {
-  return style === 'same' ? '🎯 Same code' : '🔒 Each sets a code';
-}
+const myGame = () => room?.mine ?? null;
+const myDone = () => Boolean(myGame()?.finished);
+const inRound = () => Boolean(room?.playing && myGame());
+const ordinal = (n: number) => `${n}${(n % 100 >= 11 && n % 100 <= 13) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+const roundPlayers = () => room?.players.filter((p) => p.in_round) ?? [];
 
 // ---------- entering and leaving ----------
 
@@ -46,15 +40,18 @@ function enter(state: RoomState) {
   save();
   if (firstTime) {
     live?.leave();
-    liveReady = false;
-    live = joinLive(state.code, currentUser()?.id || 'me', () => void fetchRoom(), (n) => { liveReady = true; othersOnline = n; redraw(); });
+    live = joinLive(state.code, currentUser()?.id || 'me', () => void fetchRoom(), () => {});
     tab = 'mine';
-    shownResultFor = '';
+    shownResultFor = `${state.id}:${state.playing ? '' : state.round}`; // don't pop up an old result
   }
   update(state);
+  startPolling();
+  openRoom();
+}
+
+function startPolling() {
   clearInterval(poll);
   poll = window.setInterval(() => { if (!document.hidden) void fetchRoom(); }, 3000);
-  openRoom();
 }
 
 export function openRoom() {
@@ -63,9 +60,12 @@ export function openRoom() {
     show('versus');
     return;
   }
-  if (room.phase === 'waiting') { show('versus'); return; }
-  setController(roomController());
-  show('game');
+  if (inRound()) {
+    setController(roomController());
+    show('game');
+  } else {
+    show('versus');
+  }
 }
 
 export async function resumeRoom() {
@@ -94,7 +94,7 @@ async function fetchRoom() {
     const state = await api.roomState(data.room.id);
     if (!state) {
       forget();
-      if (screen() === 'game' || screen() === 'versus') { toast('The room has closed.'); show('home'); }
+      if (screen() === 'game' || screen() === 'versus') { toast('You\'re no longer in that room.'); show('home'); }
       return;
     }
     update(state);
@@ -107,16 +107,23 @@ async function fetchRoom() {
 function update(state: RoomState) {
   const before = room;
   room = state;
-  const mine = state.mine?.guesses.length ?? 0;
-  const theirs = state.theirs?.count ?? 0;
-  if (before && before.round === state.round && theirs > lastSeen.theirs && tab === 'mine') feel.pop();
-  lastSeen = { mine, theirs };
-  if (state.phase !== 'waiting' && screen() === 'versus') { openRoom(); return; }
-  if (state.phase === 'done' && state.mine && shownResultFor !== `${state.id}:${state.round}`) {
-    shownResultFor = `${state.id}:${state.round}`;
+  // Someone else made progress: a quiet click.
+  const counts = state.players.map((p) => `${p.name}:${p.count}:${p.finished}`).join('|');
+  if (before?.round === state.round && counts !== lastCounts && screen() === 'game') feel.pop();
+  lastCounts = counts;
+  // A round started (and I'm in it): go to the game.
+  if (state.playing && state.mine && !(before?.playing && before.round === state.round)) {
+    tab = 'mine';
+    if ($('result').dataset.kind === 'room') $('result').classList.add('hidden'); // last round's result
+    if (screen() === 'versus' || screen() === 'game') { setController(roomController()); show('game'); }
+  }
+  // The round I played just ended: show where I came.
+  const key = `${state.id}:${state.round}`;
+  if (!state.playing && state.mine && shownResultFor !== key) {
+    shownResultFor = key;
     addFinished(state.mine);
-    if (state.result === 'win') confetti(CONFETTI);
-    else if (state.result === 'lose') feel.fail();
+    if (state.mine.place === 1 && state.mine.cracked) confetti(CONFETTI);
+    else if (!state.mine.cracked) feel.fail();
     setTimeout(showRoomResult, 600);
   }
   redraw();
@@ -130,8 +137,8 @@ function redraw() {
 
 async function leaveRoom(): Promise<boolean> {
   if (!data.room) return true;
-  const playing = room?.phase === 'play' && !myDone();
-  if (!await ask(playing ? `Leave the room? That counts as giving up, so ${themText()} wins.` : 'Leave the room?', { yes: 'Leave' })) return false;
+  const playing = inRound() && !myDone();
+  if (!await ask(playing ? 'Leave the room? That counts as giving up this round.' : 'Leave the room?', { yes: 'Leave' })) return false;
   try {
     await api.roomLeave(data.room.id);
   } catch (e) {
@@ -148,16 +155,33 @@ onLeave((from, to) => {
   if ((from === 'game' || from === 'versus') && to !== 'game' && to !== 'versus') clearInterval(poll);
 });
 
+// ---------- players list ----------
+
+function playerStatus(p: RoomPlayer, over: boolean): { text: string; cls: string } {
+  if (!p.in_round) return { text: room?.playing ? 'next round' : '', cls: 'out' };
+  if (p.cracked) return { text: `✓ ${plural(p.count, 'guess')}${over && p.ms != null ? ` · ${formatTime(p.ms)}` : ''}`, cls: 'ok' };
+  if (p.gave_up) return { text: p.in_room ? 'gave up' : 'left', cls: 'out' };
+  if (p.finished) return { text: 'not cracked', cls: 'out' };
+  return { text: `${p.count} …`, cls: '' };
+}
+
+function playersHtml(list: RoomPlayer[], over: boolean): string {
+  return list.map((p) => {
+    const s = playerStatus(p, over);
+    const mark = over && p.place && p.in_round ? (p.place === 1 && p.cracked ? '🏆' : String(p.place)) : p.host ? '👑' : '';
+    return `<li class="${p.me ? 'me' : ''}${!p.in_room ? ' gone' : ''}${over && p.place === 1 && p.cracked ? ' first' : ''}">
+      <span class="place">${mark}</span>
+      <span class="who-name">${esc(p.name)}${p.me ? '<small>you</small>' : ''}${p.host && over && p.place ? '<small>host</small>' : ''}</span>
+      <span class="status ${s.cls}">${s.text}</span></li>`;
+  }).join('');
+}
+
 // ---------- lobby ----------
 
 function renderLobby() {
   $('lobby-start').classList.toggle('hidden', Boolean(data.room));
   $('lobby-room').classList.toggle('hidden', !data.room);
-  $('vs-style').querySelectorAll<HTMLElement>('.style-opt').forEach((b) => {
-    b.classList.toggle('on', b.dataset.style === newStyle);
-    b.setAttribute('aria-checked', String(b.dataset.style === newStyle));
-    b.onclick = () => { newStyle = b.dataset.style as RoomStyle; renderLobby(); };
-  });
+  $('lobby-title').textContent = data.room ? `Room ${data.room.code}` : 'Play friends';
   const chips = $('vs-length');
   chips.innerHTML = '';
   for (const len of LENGTHS) {
@@ -171,26 +195,74 @@ function renderLobby() {
   $('lobby-offline').classList.toggle('hidden', online());
   if (!data.room) return;
   $('room-code').textContent = data.room.code;
-  $('room-style').textContent = room ? `${styleName(room.style)} · ${room.length} digits` : '';
-  $('room-status').textContent = room ? 'Waiting for your friend to join…' : 'Connecting…';
+  if (!room) {
+    $('room-style').textContent = '';
+    $('room-players').innerHTML = '';
+    $('room-status').textContent = 'Connecting…';
+    $('start-round').classList.add('hidden');
+    $('room-last').classList.add('hidden');
+    return;
+  }
+  const inRoom = room.players.filter((p) => p.in_room);
+  $('room-style').textContent = `🎯 Everyone cracks the same ${room.length}-digit code`;
+  $('room-players-title').textContent = `Players (${inRoom.length}/8)`;
+
+  // Last round's results (or the round going on, for someone who joined during it).
+  const last = $('room-last');
+  if (room.round > 0 && (room.playing ? !room.mine : true)) {
+    last.classList.remove('hidden');
+    last.innerHTML = room.playing
+      ? `<h3>Round ${room.round} is on</h3><p class="fine">You'll play from the next round.</p><ul class="room-players">${playersHtml(roundPlayers(), false)}</ul>`
+      : `<div class="round-code"><h3>Round ${room.round}</h3>${room.secret ? `<span class="tiles">${tilesHtml(room.secret)}</span>` : ''}</div><ul class="room-players">${playersHtml(roundPlayers(), true)}</ul>`;
+  } else {
+    last.classList.add('hidden');
+  }
+
+  $('room-players').innerHTML = playersHtml(inRoom.map((p) => ({ ...p, in_round: false })), false);
+  const startBtn = $<HTMLButtonElement>('start-round');
+  if (room.playing) {
+    startBtn.classList.add('hidden');
+    $('room-status').textContent = room.mine ? '' : 'Waiting for this round to finish…';
+  } else if (room.host) {
+    startBtn.classList.remove('hidden');
+    startBtn.textContent = room.round ? 'Next round' : 'Start game';
+    startBtn.disabled = inRoom.length < 2;
+    $('room-status').textContent = inRoom.length < 2 ? 'Send the invite: you need at least one more player.' : `Start when everyone's in.`;
+  } else {
+    startBtn.classList.add('hidden');
+    $('room-status').textContent = `Waiting for ${room.host_name} to start${room.round ? ' the next round' : ''}…`;
+  }
 }
 
 register('versus', () => {
   renderLobby();
   if (data.room) {
     void fetchRoom();
-    clearInterval(poll);
-    poll = window.setInterval(() => { if (!document.hidden) void fetchRoom(); }, 3000);
+    startPolling();
   }
 });
 
 on('create-room', 'click', async () => {
-  if (!online()) return toast('Playing a friend needs internet.');
+  if (!online()) return toast('Playing friends needs internet.');
   const done = busy($('create-room'), 'Creating…');
   try {
-    enter(await api.roomCreate(newStyle, newLength));
+    enter(await api.roomCreate(newLength));
   } catch (e) {
     toast((e as Error).message);
+  } finally {
+    done();
+  }
+});
+
+on('start-round', 'click', async () => {
+  if (!room) return;
+  const done = busy($('start-round'), 'Starting…');
+  try {
+    const state = await api.roomStart(room.id);
+    live?.poke();
+    update(state);
+  } catch (e) {
+    toast((e as Error).message === 'waiting for players' ? 'You need at least one more player.' : (e as Error).message);
   } finally {
     done();
   }
@@ -200,14 +272,14 @@ export async function joinByCode(raw: string, button?: HTMLElement) {
   const code = raw.trim().toUpperCase();
   if (!/^[A-Z0-9]{5}$/.test(code)) return toast('Room codes are 5 letters and numbers.');
   if (data.room && data.room.code !== code) { toast(`Leave room ${data.room.code} first.`); openRoom(); return; }
-  if (!online()) return toast('Playing a friend needs internet.');
+  if (!online()) return toast('Playing friends needs internet.');
   const done = button ? busy(button, 'Joining…') : () => {};
   try {
     enter(await api.roomJoin(code));
     live?.poke();
   } catch (e) {
     const msg = (e as Error).message;
-    toast(msg === 'room not found' ? `There's no room ${code}.` : msg === 'room full' ? 'That room already has two players.' : msg);
+    toast(msg === 'room not found' ? `There's no room ${code}.` : msg === 'room full' ? 'That room is full (8 players).' : msg);
   } finally {
     done();
   }
@@ -224,22 +296,16 @@ on('join-form', 'submit', (e) => {
 on('leave-room', 'click', () => void leaveRoom());
 on('share-room', 'click', () => void shareInvite());
 
-function inviteLink(code: string) {
-  return `${location.origin}${location.pathname}?room=${code}`;
-}
-
 async function shareInvite() {
   if (!data.room) return;
   const code = data.room.code;
-  const url = inviteLink(code);
-  const text = room?.style === 'same'
-    ? `Play Vault with me! Let's see who cracks the code first. Room ${code}:`
-    : `Play Vault with me! Crack my code before I crack yours. Room ${code}:`;
+  const url = `${location.origin}${location.pathname}?room=${code}`;
+  const text = `Play Vault with me! Let's see who cracks the code first. Room ${code}:`;
   try {
     if (navigator.share) await navigator.share({ text, url });
-    else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Invite link copied. Send it to your friend.'); }
+    else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Invite link copied. Send it to your friends.'); }
   } catch (err) {
-    if ((err as Error)?.name !== 'AbortError') toast(`Couldn't share. Tell your friend the room code: ${code}`);
+    if ((err as Error)?.name !== 'AbortError') toast(`Couldn't share. Tell your friends the room code: ${code}`);
   }
 }
 
@@ -247,45 +313,31 @@ async function shareInvite() {
 
 function roomController(): Controller {
   return {
-    title: () => `vs ${themText()}`,
+    title: () => `Room ${room?.code ?? ''}`,
     sub() {
-      if (!room) return '';
-      const name = them();
-      let sub = '';
-      if (room.phase === 'setcode') sub = room.my_code ? `🔒 Locked in · waiting for ${name}…` : 'Set your secret code';
-      else if (room.phase === 'done') sub = `<b>${{ win: 'You win! 🏆', lose: `${name} wins`, draw: "It's a draw" }[room.result || 'draw']}</b>`;
-      else if (room.mine) {
-        const t = room.theirs;
-        const mineCracked = room.mine.cracked ? room.mine.guesses.length : 0;
-        const me = mineCracked ? `✓ ${mineCracked}` : room.mine.gave_up ? 'gave up' : String(room.mine.guesses.length);
-        const other = t?.cracked_at ? `✓ ${t.cracked_at}` : t?.gave_up ? 'gave up' : String(t?.count ?? 0);
-        sub = `You ${me} · ${name} ${other} <small>guesses</small>`;
-      }
-      if (room.them_left && room.phase !== 'done') sub += ` · <span class="warn">${name} left</span>`;
-      else if (liveReady && !othersOnline && room.them_name && room.phase !== 'done') sub += ` · <span class="warn">${name} offline</span>`;
-      return sub;
+      if (!room?.mine) return '';
+      const players = roundPlayers();
+      const cracked = players.filter((p) => p.cracked).length;
+      const me = room.mine.cracked ? `✓ ${room.mine.guesses.length}` : room.mine.gave_up ? 'gave up' : String(room.mine.guesses.length);
+      return `You ${me} · ${cracked}/${players.length} cracked`;
     },
     length: () => room?.length ?? 4,
     notes: () => (room?.mine ? (data.notes[room.mine.id] ||= {}) : {}),
     saveNotes: save,
-    canType: () => Boolean(room) && ((room!.phase === 'setcode' && room!.style === 'own' && !room!.my_code) || (room!.phase === 'play' && !myDone())),
-    goLabel: () => (room?.phase === 'setcode' ? 'Lock in' : 'Guess'),
-    showNotes: () => room?.phase === 'play',
+    canType: () => inRound() && !myDone(),
+    goLabel: () => 'Guess',
+    showNotes: () => true,
     async submit(code) {
-      if (!room) return;
+      const g0 = myGame();
+      if (!room || !g0) return;
+      if (g0.guesses.some((x) => x.guess === code)) return `You already tried ${code}.`;
       try {
-        if (room.phase === 'setcode') {
-          update(await api.roomSetCode(room.id, code));
-          feel.guess(0, 0);
-        } else if (room.mine) {
-          if (room.mine.guesses.some((x) => x.guess === code)) return `You already tried ${code}.`;
-          const g = await api.guess(room.mine.id, code);
-          const lastGuess = g.guesses[g.guesses.length - 1];
-          if (g.cracked) feel.open(); else feel.guess(lastGuess.exact, lastGuess.close);
-          const state = await api.roomState(room.id);
-          if (state) update(state);
-          renderGame(true);
-        }
+        const g = await api.guess(g0.id, code);
+        const last = g.guesses[g.guesses.length - 1];
+        if (g.cracked) feel.open(); else feel.guess(last.exact, last.close);
+        const state = await api.roomState(room.id);
+        if (state) update(state);
+        renderGame(true);
         live?.poke();
       } catch (e) {
         return e instanceof ApiError && e.offline ? "No connection, so that wasn't sent. Try again." : (e as Error).message;
@@ -293,71 +345,38 @@ function roomController(): Controller {
     },
     list(list, justGuessed) {
       if (!room) { list.innerHTML = ''; return null; }
-      const name = them();
-      const codeCard = (label: string, code: string) => `<li class="code-card"><span>${label}</span><span class="tiles">${tilesHtml(code)}</span></li>`;
-      if (room.phase === 'setcode' && room.my_code) {
-        list.innerHTML = codeCard('Your code 🔒', room.my_code)
-          + `<li class="empty">When ${name} has set theirs, you both start guessing. Fewest guesses wins; if it's a tie, the faster player wins.</li>`;
+      if (tab === 'players') {
+        list.innerHTML = `<li class="empty">Everyone's guesses are shown when the round ends.</li><li><ul class="room-players">${playersHtml(roundPlayers(), false)}</ul></li>`;
         return null;
-      }
-      if (room.phase === 'setcode') {
-        list.innerHTML = `<li class="empty">Pick ${room.length} different digits for ${name} to crack and tap <b>Lock in</b>.<br>The server keeps it secret until the game ends.</li>`;
-        return null;
-      }
-      if (tab === 'theirs') {
-        const t = room.theirs;
-        if (!t?.game) {
-          list.innerHTML = `<li class="empty">${name} has made ${plural(t?.count ?? 0, 'guess')}.<br>You'll see them when the game ends, so nobody can copy.</li>`;
-          return null;
-        }
-        const rows: Row[] = t.game.guesses.map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
-        const code = room.style === 'own' ? room.my_code : t.game.secret;
-        list.innerHTML = (code ? codeCard(room.style === 'own' ? 'Your code' : 'The code', code) : '')
-          + (rows.length ? rowsHtml(rows, false, true) : `<li class="empty">${name} hasn't guessed yet.</li>`);
-        return rows;
       }
       const rows: Row[] = (room.mine?.guesses ?? []).map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
       list.innerHTML = rows.length ? rowsHtml(rows, justGuessed)
-        : `<li class="empty">Go! ${room.style === 'same' ? `Crack the ${room.length}-digit code before ${name} does.` : `Crack ${name}'s ${room.length}-digit code.`}<br>Each guess gets feedback: <b class="t-exact">right spot</b> and <b class="t-close">wrong spot</b>.</li>`;
+        : `<li class="empty">Go! Everyone's cracking the same ${room.length}-digit code.<br>Each guess gets feedback: <b class="t-exact">right spot</b> and <b class="t-close">wrong spot</b>.</li>`;
       return rows;
     },
     head() {
-      if (!room || (room.phase !== 'play' && room.phase !== 'done')) return null;
-      return `<span class="who-switch" role="tablist"><button class="who${tab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">You</button><button class="who${tab === 'theirs' ? ' on' : ''}" data-tab="theirs" role="tab">${them()} <small>${room.theirs?.count ?? 0}</small></button></span>`;
+      if (!room) return null;
+      return `<span class="who-switch" role="tablist"><button class="who${tab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">You</button><button class="who${tab === 'players' ? ' on' : ''}" data-tab="players" role="tab">Players <small>${roundPlayers().length}</small></button></span>`;
     },
     onHead(head) {
-      head.querySelectorAll<HTMLElement>('.who').forEach((b) => { b.onclick = () => { tab = b.dataset.tab as 'mine' | 'theirs'; renderGame(); }; });
+      head.querySelectorAll<HTMLElement>('.who').forEach((b) => { b.onclick = () => { tab = b.dataset.tab as 'mine' | 'players'; renderGame(); }; });
     },
     panel() {
-      if (!room) return '';
-      const name = them();
-      if (room.phase === 'done') {
-        const word = { win: 'You win!', lose: `${name} wins.`, draw: "It's a draw." }[room.result || 'draw'];
-        const why = room.them_left ? `${name} left the room.` : resultReason();
-        const rematch = room.them_left ? `<p>Send the invite again to play someone new.</p>`
-          : room.rematch.me ? `<p>Waiting for ${name} to tap Rematch…</p>`
-            : room.rematch.them ? `<p><b>${name} wants a rematch!</b></p>` : '';
-        return `<p><b>${word}</b> ${esc(why)}</p>${rematch}<div class="vs-actions">`
-          + (room.them_left ? '<button class="btn small" data-act="invite">Send invite</button>' : `<button class="btn small" data-act="rematch"${room.rematch.me ? ' disabled' : ''}>Rematch</button>`)
-          + '<button class="btn small secondary" data-act="leave">Leave</button></div>';
-      }
-      if (room.phase === 'play' && myDone()) {
-        return `<p>${room.mine?.cracked ? `You cracked it in ${room.mine.guesses.length}!` : 'You gave up.'} Waiting for ${name} to finish…</p>`;
-      }
-      return '';
+      if (!room || !inRound() || !myDone()) return '';
+      const left = roundPlayers().filter((p) => !p.finished).length;
+      return `<p>${room.mine?.cracked ? `You cracked it in ${room.mine.guesses.length}!` : 'You gave up.'} Waiting for ${plural(left, 'player')} to finish…</p>`
+        + (room.host ? '<div class="vs-actions"><button class="btn small secondary" data-act="end">End round now</button></div>' : '');
     },
     bindPanel(panel) {
-      panel.querySelector('[data-act="rematch"]')?.addEventListener('click', () => void rematch());
-      panel.querySelector('[data-act="leave"]')?.addEventListener('click', () => void leaveRoom());
-      panel.querySelector('[data-act="invite"]')?.addEventListener('click', () => void shareInvite());
+      panel.querySelector('[data-act="end"]')?.addEventListener('click', () => void endRound());
     },
     explain(i) {
-      if (!room?.mine || tab !== 'mine') return '';
-      const gs = room.mine.guesses;
-      const fb = gs.map((x) => ({ exact: x.exact, close: x.close }));
-      let text = explain(gs[i].guess, fb[i]);
+      const g = myGame();
+      if (!g || tab !== 'mine') return '';
+      const fb = g.guesses.map((x) => ({ exact: x.exact, close: x.close }));
+      let text = explain(g.guesses[i].guess, fb[i]);
       if (settings().showLeft) {
-        const n = remainingFrom(room.length, gs.slice(0, i + 1).map((x) => x.guess), fb);
+        const n = remainingFrom(g.length, g.guesses.slice(0, i + 1).map((x) => x.guess), fb);
         text += ` ${n.toLocaleString()} possible code${n === 1 ? '' : 's'} left.`;
       }
       return text;
@@ -367,65 +386,60 @@ function roomController(): Controller {
   };
 }
 
-function resultReason(): string {
-  if (!room?.mine) return '';
-  const mine = room.mine.cracked ? room.mine.guesses.length : null;
-  const theirs = room.theirs?.cracked_at ?? null;
-  if (room.mine.gave_up && room.theirs?.gave_up) return 'You both gave up.';
-  if (room.mine.gave_up) return 'You gave up.';
-  if (room.theirs?.gave_up) return 'They gave up.';
-  if (mine && theirs && mine === theirs) return room.result === 'draw' ? 'Same guesses, same time!' : `Same number of guesses, but ${room.result === 'win' ? 'you were' : 'they were'} faster.`;
-  return room.result === 'win' ? 'Fewer guesses.' : 'They needed fewer guesses.';
-}
-
-async function rematch() {
+async function endRound() {
   if (!room) return;
+  const left = roundPlayers().filter((p) => !p.finished).length;
+  if (!await ask(`End the round now? ${plural(left, 'player')} still guessing won't have cracked it.`, { yes: 'End round' })) return;
   try {
-    update(await api.roomRematch(room.id));
+    update(await api.roomEnd(room.id));
     live?.poke();
-    $('result').classList.add('hidden');
-    openRoom();
   } catch (e) {
     toast((e as Error).message);
   }
 }
 
 function showRoomResult() {
-  if (!room || room.phase !== 'done' || !room.mine) return;
-  const name = themText();
-  const mine = room.mine.cracked ? room.mine.guesses.length : null;
-  const theirs = room.theirs?.cracked_at ?? null;
-  $('result-title').textContent = { win: 'You win! 🏆', lose: `${name} wins`, draw: "It's a draw" }[room.result || 'draw'];
-  const code = room.mine.secret || '';
-  $('result-label').textContent = room.style === 'same' ? 'The code' : `${name}'s code`;
+  if (!room || room.playing || !room.mine) return;
+  const g = room.mine;
+  const players = roundPlayers();
+  const place = g.place ?? players.length;
+  $('result-title').textContent = !g.cracked ? 'Not cracked' : place === 1 ? (g.result === 'draw' ? 'Tied for 1st! 🏆' : '1st place! 🏆') : `${ordinal(place)} place`;
+  $('result-label').textContent = 'The code';
   $('result-label').classList.remove('hidden');
-  $('result-code').innerHTML = tilesHtml(code || '?'.repeat(room.length));
-  const side = (n: number | null, gaveUp: boolean | undefined) => (n ? plural(n, 'guess') : gaveUp ? 'gave up' : 'not cracked');
-  $('result-text').textContent = `You: ${side(mine, room.mine.gave_up)} · ${name}: ${side(theirs, room.theirs?.gave_up)}`;
-  $('result-extra').textContent = [
-    room.them_left ? `${name} left the room.` : resultReason(),
-    room.rematch.them && !room.rematch.me ? `${name} wants a rematch!` : '',
-  ].filter(Boolean).join(' ');
-  $('again-btn').textContent = room.them_left ? 'Send invite' : room.rematch.me ? 'Waiting for rematch…' : 'Rematch';
-  $('again-btn').classList.remove('hidden');
-  $<HTMLButtonElement>('again-btn').disabled = room.rematch.me && !room.them_left;
+  $('result-code').innerHTML = tilesHtml(room.secret || g.secret || '?'.repeat(room.length));
+  $('result-text').textContent = g.cracked
+    ? `${plural(g.guesses.length, 'guess')} · ${ordinal(place)} of ${players.length}`
+    : `${g.gave_up ? 'You gave up' : 'Not cracked'} · ${players.length} players`;
+  const podium = players.filter((p) => p.cracked).slice(0, 3)
+    .map((p) => `${p.place}. ${p.me ? 'You' : p.name} (${p.count})`).join(' · ');
+  $('result-extra').textContent = podium || 'Nobody cracked it this round.';
+  $('again-btn').textContent = 'Next round';
+  $('again-btn').classList.toggle('hidden', !room.host);
+  $<HTMLButtonElement>('again-btn').disabled = room.players.filter((p) => p.in_room).length < 2;
   $('share-btn').classList.add('hidden');
-  $('result-stats-btn').textContent = 'See the guesses';
+  $('result-stats-btn').textContent = room.host ? 'Room lobby' : `Room lobby (waiting for ${room.host_name})`;
   $('result-home-btn').textContent = 'Leave room';
   $('result').dataset.kind = 'room';
   $('result').classList.remove('hidden');
 }
 
 const isRoomResult = () => $('result').dataset.kind === 'room';
-on('again-btn', 'click', () => {
-  if (!isRoomResult()) return;
-  if (room?.them_left) { void shareInvite(); return; }
-  void rematch();
+on('again-btn', 'click', async () => {
+  if (!isRoomResult() || !room) return;
+  $('result').classList.add('hidden');
+  try {
+    const state = await api.roomStart(room.id);
+    live?.poke();
+    update(state);
+  } catch (e) {
+    toast((e as Error).message === 'waiting for players' ? 'Everyone else has left the room.' : (e as Error).message);
+    show('versus');
+  }
 });
 on('result-stats-btn', 'click', () => {
   if (!isRoomResult()) return;
   $('result').classList.add('hidden');
-  renderGame();
+  show('versus');
 });
 on('result-home-btn', 'click', async () => {
   if (!isRoomResult()) return;
@@ -437,8 +451,10 @@ on('result-home-btn', 'click', async () => {
 function openRoomMenu() {
   if (!room) return;
   $('room-menu-title').textContent = `Room ${room.code}`;
-  $('room-menu-info').textContent = `vs ${themText()} · ${styleName(room.style)} · ${room.length} digits`;
-  $('menu-giveup').classList.toggle('hidden', !(room.phase === 'play' && !myDone()));
+  $('room-menu-info').textContent = `${plural(room.players.filter((p) => p.in_room).length, 'player')} · ${room.length} digits · host: ${room.host ? 'you' : room.host_name}`;
+  $('menu-giveup').classList.toggle('hidden', !(inRound() && !myDone()));
+  $('menu-end').classList.toggle('hidden', !(room.host && room.playing));
+  $('menu-lobby').classList.toggle('hidden', room.playing);
   $('room-menu').classList.remove('hidden');
 }
 const closeMenu = () => $('room-menu').classList.add('hidden');
@@ -446,12 +462,15 @@ on('menu-close', 'click', closeMenu);
 on('room-menu', 'click', (e) => { if (e.target === $('room-menu')) closeMenu(); });
 on('menu-invite', 'click', () => { closeMenu(); void shareInvite(); });
 on('menu-leave', 'click', () => { closeMenu(); void leaveRoom(); });
+on('menu-lobby', 'click', () => { closeMenu(); show('versus'); });
+on('menu-end', 'click', () => { closeMenu(); void endRound(); });
 on('menu-giveup', 'click', async () => {
   closeMenu();
-  if (!room?.mine || myDone()) return;
-  if (!await ask(`Give up? ${themText()} wins.`, { yes: 'Give up' })) return;
+  const g = myGame();
+  if (!g || myDone()) return;
+  if (!await ask('Give up this round?', { yes: 'Give up' })) return;
   try {
-    await api.giveUp(room.mine.id);
+    await api.giveUp(g.id);
     live?.poke();
     await fetchRoom();
   } catch (e) {

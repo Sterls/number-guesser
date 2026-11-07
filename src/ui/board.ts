@@ -89,6 +89,7 @@ export function renderGame(justGuessed = false) {
   });
   const head = ctl.head();
   $('guess-head').classList.toggle('hidden', head === null && !rows?.length);
+  $('guess-head').classList.toggle('no-cols', !rows?.length); // no guess rows: no column headings
   $('guess-head-label').innerHTML = head ?? 'Your guess';
   ctl.onHead?.($('guess-head-label'));
   if (rows?.length && list.querySelector('.guess-row[data-i]:not(.theirs)')) showExplanation(rows.length - 1);

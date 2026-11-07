@@ -1,7 +1,7 @@
 // The server calls (Postgres functions in supabase/setup.sql).
 
 import { supabase, currentUser } from './supabase';
-import type { Board, BoardRow, DailyRow, Me, RoomState, RoomStyle, ServerGame } from '../lib/types';
+import type { Board, BoardRow, DailyRow, Me, RoomState, ServerGame } from '../lib/types';
 
 export class ApiError extends Error {
   offline: boolean;
@@ -46,11 +46,11 @@ export const api = {
   giveUp: (id: string) => rpc<ServerGame>('vault_give_up', { p_game: id }),
   myStreak: (day: string) => rpc<number>('vault_my_streak', { p_day: day }),
 
-  roomCreate: (style: RoomStyle, length: number) => rpc<RoomState>('vault_room_create', { p_style: style, p_length: length }),
+  roomCreate: (length: number) => rpc<RoomState>('vault_room_create', { p_length: length }),
   roomJoin: (code: string) => rpc<RoomState>('vault_room_join', { p_code: code }),
   roomState: (id: string) => rpc<RoomState | null>('vault_room_state', { p_room: id }),
-  roomSetCode: (id: string, code: string) => rpc<RoomState>('vault_room_set_code', { p_room: id, p_code: code }),
-  roomRematch: (id: string) => rpc<RoomState>('vault_room_rematch', { p_room: id }),
+  roomStart: (id: string) => rpc<RoomState>('vault_room_start', { p_room: id }),
+  roomEnd: (id: string) => rpc<RoomState>('vault_room_end', { p_room: id }),
   roomLeave: (id: string) => rpc<void>('vault_room_leave', { p_room: id }),
 
   dailyBoard: (day: string) => rpc<Board<DailyRow> & { day: string; players: number }>('vault_daily_board', { p_day: day }),

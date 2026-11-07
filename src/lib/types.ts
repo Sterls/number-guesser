@@ -16,6 +16,7 @@ export interface ServerGame {
   round: number | null;
   opponent: string | null;
   result: 'win' | 'lose' | 'draw' | null;
+  place?: number | null;   // room games, once the round is over
   guesses: Guess[];
   cracked: boolean;
   gave_up: boolean;
@@ -30,32 +31,32 @@ export interface Me {
   on_board: boolean;
 }
 
-export type RoomStyle = 'own' | 'same';
+export interface RoomPlayer {
+  name: string;
+  me: boolean;
+  host: boolean;
+  in_room: boolean;       // false: left during this round
+  in_round: boolean;      // false: joined after this round started
+  count: number;          // guesses so far
+  cracked: boolean;
+  gave_up: boolean;
+  finished: boolean;
+  place: number | null;   // once the round is over (1 = first)
+  ms: number | null;      // time of the cracking guess
+  guesses: Guess[] | null; // only once the round is over
+}
 
 export interface RoomState {
   id: string;
   code: string;
-  style: RoomStyle;
   length: number;
-  round: number;
-  host: boolean;
-  phase: 'waiting' | 'setcode' | 'play' | 'done';
-  me_name: string;
-  them_name: string | null;
-  them_left: boolean;
-  opponent: string | null;
-  my_code: string | null;
-  their_code_set: boolean;
-  mine: ServerGame | null;
-  theirs: {
-    count: number;
-    cracked: boolean;
-    gave_up: boolean;
-    cracked_at: number | null;
-    game: ServerGame | null; // their guesses, when you're allowed to see them
-  } | null;
-  result: 'win' | 'lose' | 'draw' | null;
-  rematch: { me: boolean; them: boolean };
+  round: number;           // 0 until the first round starts
+  playing: boolean;
+  host: boolean;           // am I the host
+  host_name: string;
+  mine: ServerGame | null; // my game this round
+  secret: string | null;   // this round's code, once it's over
+  players: RoomPlayer[];
 }
 
 export interface BoardRow {

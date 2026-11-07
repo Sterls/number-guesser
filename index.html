@@ -54,7 +54,7 @@
     <div id="offline-note" class="offline-note hidden"><p id="offline-text">📴 You're offline. Single player still works, but won't count on the leaderboard.</p><button id="retry-btn" class="link hidden">Try again</button></div>
     <button id="daily-btn" class="btn big">Daily code</button>
     <button id="practice-btn" class="btn secondary">Single player</button>
-    <button id="versus-btn" class="btn secondary">⚔️ Play a friend</button>
+    <button id="versus-btn" class="btn secondary">⚔️ Play friends</button>
     <div class="home-row">
       <button id="board-btn" class="btn secondary half">🏆 Leaderboard</button>
       <button id="stats-btn" class="btn secondary half">📊 Stats</button>
@@ -99,27 +99,19 @@
     </div>
   </section>
 
-  <!-- Play a friend: create or join a room -->
+  <!-- Play friends: create or join a room -->
   <section id="versus" class="screen hidden">
     <div class="bar">
       <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <h2>Play a friend</h2>
+      <h2 id="lobby-title">Play friends</h2>
       <div class="bar-spacer"></div>
     </div>
     <div class="scroll lobby">
-      <p id="lobby-offline" class="offline-note hidden">📴 Playing a friend needs internet.</p>
+      <p id="lobby-offline" class="offline-note hidden">📴 Playing friends needs internet.</p>
       <div id="lobby-start">
-        <p class="lobby-intro">Race a friend to crack a code. Fewest guesses wins.</p>
+        <p class="lobby-intro">Up to 8 players race to crack the same code. Fewest guesses wins; ties go to the fastest.</p>
         <div class="card lobby-card">
           <h3>Create a room</h3>
-          <div id="vs-style" class="style-choice" role="radiogroup" aria-label="How to play">
-            <button type="button" class="style-opt" data-style="own" role="radio">
-              <b>🔒 Each sets a code</b><small>You each pick a code for the other to crack.</small>
-            </button>
-            <button type="button" class="style-opt" data-style="same" role="radio">
-              <b>🎯 Same code</b><small>You both crack the same random code.</small>
-            </button>
-          </div>
           <div class="setting"><span>Code length</span><div id="vs-length" class="chips" role="group" aria-label="Code length"></div></div>
           <button id="create-room" class="btn">Create room</button>
         </div>
@@ -137,8 +129,14 @@
           <p class="fine">Room code</p>
           <p id="room-code" class="room-code"></p>
           <p id="room-style" class="room-style"></p>
-          <button id="share-room" class="btn">Send invite</button>
+          <button id="share-room" class="btn secondary">Send invite</button>
+        </div>
+        <div id="room-last" class="card lobby-card hidden"></div>
+        <div class="card lobby-card">
+          <h3 id="room-players-title">Players</h3>
+          <ul id="room-players" class="room-players"></ul>
           <p id="room-status" class="room-status" role="status"></p>
+          <button id="start-round" class="btn hidden">Start game</button>
         </div>
         <button id="leave-room" class="btn ghost">Leave room</button>
       </div>
@@ -266,7 +264,7 @@
       <label class="setting"><span>Vibrate<small>Android phones only.</small></span><input id="set-vibrate" type="checkbox"></label>
       <label class="setting"><span>Show how many codes are still possible<small>A helper for learning. Off by default.</small></span><input id="set-left" type="checkbox"></label>
     </div>
-    <p class="fine">Ranked games are checked by our server. Nothing about you is shared unless you join the leaderboard or play a friend. No ads, no tracking. <a href="privacy.html">Privacy policy</a></p>
+    <p class="fine">Ranked games are checked by our server. Nothing about you is shared unless you join the leaderboard or play friends. No ads, no tracking. <a href="privacy.html">Privacy policy</a></p>
   </section>
 
   <!-- Result -->
@@ -284,12 +282,14 @@
     </div>
   </div>
 
-  <!-- Room menu (the gear while playing a friend) -->
+  <!-- Room menu (the gear while playing friends) -->
   <div id="room-menu" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="room-menu-title">
     <div class="modal-card">
       <h2 id="room-menu-title">Room</h2>
       <p id="room-menu-info" class="fine"></p>
       <button id="menu-giveup" class="btn secondary">🏳️ Give up</button>
+      <button id="menu-end" class="btn secondary">End round for everyone</button>
+      <button id="menu-lobby" class="btn secondary">Room lobby</button>
       <button id="menu-invite" class="btn secondary">Send invite</button>
       <button id="menu-leave" class="btn secondary danger-text">Leave room</button>
       <button id="menu-close" class="btn ghost">Close</button>

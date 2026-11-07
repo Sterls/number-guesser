@@ -333,14 +333,24 @@ input:focus { border-color: var(--brass); }
 .room-style { margin: 0; font-size: 15px; font-weight: 700; }
 .room-status { margin: 0; font-size: 15px; color: var(--ink-soft); min-height: 1.4em; }
 #leave-room { align-self: center; }
-.style-choice { display: flex; flex-direction: column; gap: 8px; }
-.style-opt {
-  display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 12px 14px;
-  border: 1px solid var(--line); border-radius: 16px; background: #121926;
+/* Players in a room */
+.room-players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.room-players li {
+  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px;
+  background: #121926; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 16px;
 }
-.style-opt b { font-size: 17px; }
-.style-opt small { font-size: 14px; color: var(--ink-soft); }
-.style-opt.on { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); background: rgba(212, 162, 76, 0.08); }
+.room-players li.me { border-color: var(--brass-dark); }
+.room-players li.gone { opacity: 0.5; }
+.room-players .place { font-family: var(--mono); font-weight: 800; color: var(--ink-faint); text-align: center; }
+.room-players li.first .place { color: var(--brass); }
+.room-players .who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-players .who-name small { color: var(--ink-soft); font-size: 12px; margin-left: 6px; }
+.room-players .status { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); text-align: right; }
+.room-players .status.ok { color: var(--exact-ink); }
+.room-players .status.out { color: var(--ink-faint); }
+.guesses .room-players { margin-top: 2px; }
+.round-code { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.round-code .tiles .tile { width: 32px; height: 38px; font-size: 20px; }
 
 /* ---------- account ---------- */
 
@@ -475,3 +485,4 @@ h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); text-transform: u
 
 .offline-note p { margin: 0; }
 .offline-note .link { margin-top: 4px; color: #ffd0d0; text-decoration: underline; }
+.guess-head.no-cols span:nth-child(n+3) { visibility: hidden; }

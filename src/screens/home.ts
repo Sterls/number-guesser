@@ -33,7 +33,7 @@ function renderHome() {
   $('daily-btn').classList.toggle('dim', !isOnline);
   $('versus-btn').classList.toggle('hidden', !configured);
   $('versus-btn').classList.toggle('dim', !isOnline);
-  $('versus-btn').textContent = data.room ? `⚔️ Back to room ${data.room.code}` : '⚔️ Play a friend';
+  $('versus-btn').textContent = data.room ? `⚔️ Back to room ${data.room.code}` : '⚔️ Play friends';
   $('board-btn').classList.toggle('hidden', !configured);
   $('practice-btn').textContent = !isOnline && data.offline ? 'Continue single player' : 'Single player';
 }

@@ -21,11 +21,16 @@ working that out is the puzzle.
   Starting a new game carries on with an unfinished one, so you can't skip a
   hard code. Works offline too, but offline games don't count on the
   leaderboard.
-- **⚔️ Play a friend:** create a room, send the invite link. The room owner
-  chooses **🔒 Each sets a code** (you each set a code for the other) or
-  **🎯 Same code** (you both crack one random code). Fewest guesses wins; a
-  tie goes to whoever made their winning guess sooner. Giving up or leaving
-  the room loses. Rematch as often as you like.
+- **⚔️ Play friends:** lobbies of up to 8 players. Create a room (pick 3, 4
+  or 5 digits), send the invite link, and the host starts a round when
+  everyone's in. Everyone cracks the same random code, made by the server.
+  Players are ranked by fewest guesses, then by who cracked it sooner after
+  the start; giving up or leaving puts you below everyone who cracked it.
+  Other players' guesses stay hidden until the round ends (only their guess
+  counts show), so nobody can copy. The round ends when everyone has
+  finished, or when the host ends it; then the host starts the next one.
+  Players who join mid-round play from the next round. If the host leaves,
+  the next player becomes host.
 - **🏆 Leaderboard:** **Today's code** (fewest guesses, then fastest, with
   streaks) and **All time** per code length (average guesses or fewest
   guesses, always showing games played). Joining is optional.
@@ -111,7 +116,7 @@ with `VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_KEY=test`.
 
 - `src/main.ts`: start-up. `src/app.ts`: which screen is showing.
 - `src/screens/`: one file per screen (`home`, `play` for daily and single
-  player, `room` for playing a friend, `board`, `stats`, `account`, `settings`).
+  player, `room` for playing friends, `board`, `stats`, `account`, `settings`).
 - `src/ui/board.ts`: the game screen (guesses, keypad, notes) shared by every
   mode. `src/ui/feel.ts`: sounds (made with Web Audio) and vibration.
 - `src/lib/`: rules, stats and the name filter, with no screen code.
