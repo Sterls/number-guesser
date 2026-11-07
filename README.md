@@ -1,158 +1,130 @@
 # Vault
 
-A number code-breaking game with **no ads, no tracking and no accounts**.
+A number code-breaking game with **no ads and no tracking**.
 It's the classic "bulls and cows" game, with friendlier names.
 
-The vault has a secret code of 4 different digits (like `0472`). After each guess
-you get feedback: two numbers in labelled columns next to the guess:
+The vault has a secret code of 4 different digits (like `0472`). After each
+guess you get feedback: two numbers in labelled columns next to the guess:
 
 - 🟢 **Right spot:** number of correct digits in the correct position
 - 🟡 **Wrong spot:** number of correct digits in the wrong position
 
 They're totals for the whole guess and never say *which* digits they mean;
-working that out is the puzzle. A line under the guesses also spells the
-latest result out in words (tap any earlier guess to see its result again).
-They're numbers, not a dot per digit, on purpose: dots next to digits read
-as "this dot is about this digit", which is not how the feedback works.
+working that out is the puzzle.
 
-- **Daily code:** the same 4-digit code for everyone each day (one try per
-  player). Share your result (one `🟢1 🟡2` line per guess).
-- **Single player:** as many games as you like, with 3, 4 or 5 digits (Settings).
-- **⚔️ Play a friend:** see below.
-- **Notes row:** tap a digit to mark it ✕ (out), again for ✓ (in), again to clear.
-- **Give up** (flag button) shows the code. It counts as a loss.
-- Progress is saved on the phone. Works offline once opened.
+## Modes
 
-## Playing a friend
+- **Daily code:** the same 4-digit code for everyone each day, one try. This
+  is the main ranked mode: everyone had the same code, so it's the fairest
+  comparison. Crack it every day for a 🔥 streak.
+- **Single player:** as many games as you like, 3, 4 or 5 digits (Settings).
+  Starting a new game carries on with an unfinished one, so you can't skip a
+  hard code. Works offline too, but offline games don't count on the
+  leaderboard.
+- **⚔️ Play a friend:** create a room, send the invite link. The room owner
+  chooses **🔒 Each sets a code** (you each set a code for the other) or
+  **🎯 Same code** (you both crack one random code). Fewest guesses wins; a
+  tie goes to whoever made their winning guess sooner. Giving up or leaving
+  the room loses. Rematch as often as you like.
+- **🏆 Leaderboard:** **Today's code** (fewest guesses, then fastest, with
+  streaks) and **All time** per code length (average guesses or fewest
+  guesses, always showing games played). Joining is optional.
+- **📊 Stats:** average guesses, favourite openings, guess distribution,
+  sharpness, streaks, record against friends.
 
-1. Tap **⚔️ Play a friend**, choose how to play, pick 3, 4 or 5 digits and
-   tap **Create room**. The room owner decides:
-   - **🔒 Each sets a code:** you each set a secret code for the other to crack.
-   - **🎯 Same code:** you both crack the same random code.
-2. Tap **Send invite** and send the link to your friend (or tell them the
-   5-letter room code to type under **Join a friend's room**).
-3. When they join: in *Each sets a code* rooms you each pick a code and tap
-   **Lock in**; in *Same code* rooms you start straight away.
-4. You both guess at the same time. **Fewest guesses wins**; if it's
-   the same number, whoever made their winning guess faster wins. Giving
-   up loses. Tap **Rematch** to play again in the same room (same code
-   rooms get a new code each round).
+## Fair play: the server checks every game
 
-You can switch between **Your guesses** and **their guesses** at your code
-while you play. Closing the app doesn't drop you: open it again and it
-rejoins the room.
+Codes are made and kept on the server (Supabase, Postgres functions in
+[`supabase/setup.sql`](supabase/setup.sql)). The phone sends a guess and
+gets back only the two numbers; a code is only sent once its game is over.
+So a ranked result can't be faked by editing the page, the leaderboard only
+counts server-checked games, and a game left unfinished for 24 hours counts
+as not cracked (quitting a bad game doesn't help). The remaining way to cheat
+is a solver program making the guesses.
 
-In *Same code* rooms you can't see your friend's guesses until the game
-ends (they'd give the code away); you only see how many they've made.
+## Accounts
 
-**Fair play (each sets a code):** your code never leaves your phone during the game. Your phone
-scores your friend's guesses and sends back only the two numbers. When you
-lock in, your phone sends a fingerprint (SHA-256 hash) of your code; at the
-end both codes are revealed and checked against the fingerprint and every
-bit of feedback, so changing your code or giving wrong feedback shows up
-as a warning.
+One account per phone. The first time the game opens it makes a **guest
+account** automatically, so there's nothing to sign up for. **Sign in with
+Google** (Account screen) keeps the same games and stats and lets you carry
+on on another phone. If that Google account already plays Vault, the phone
+switches to it and brings its guest games along.
 
-**Same code rooms** work differently: the room owner's phone sends a random
-seed and both phones turn it into the same code, so each can check its own
-guesses. Neither screen shows the code until the game ends, but someone
-determined could dig it out with the browser's developer tools. Fine
-between friends; use *Each sets a code* if that matters.
+## Setup (once)
 
-Rooms use [Supabase](https://supabase.com) Realtime: the same free project as
-Whoosh Blocks (`js/config.js`), only its live connection, no database tables,
-so there's nothing to set up. Nothing is stored on the server; a room
-disappears when both players leave. Room names start with `vault-` so they
-never mix with Whoosh Blocks races. Clear `js/config.js` to hide the button.
+Everything uses the free Supabase project shared with Whoosh Blocks. Vault
+only adds `vault_*` tables and functions, so Whoosh Blocks isn't affected.
 
-To test two players without Supabase, open the game in two tabs of one
-browser with `?localroom=a` and `?localroom=b` in the address (each tab gets
-its own save).
+1. **Database:** Supabase → **SQL Editor → New query**, paste the whole of
+   [`supabase/setup.sql`](supabase/setup.sql), **Run**. Safe to run again
+   after updates. (This version replaces the first leaderboard's tables,
+   which only held test data.)
+2. **Guest accounts:** Supabase → **Authentication → Sign In / Providers**
+   → turn on **Allow anonymous sign-ins**.
+3. **Google sign-in:**
+   1. In [Google Cloud Console](https://console.cloud.google.com/) →
+      **APIs & Services → Credentials → Create credentials → OAuth client ID**,
+      type **Web application**. (If asked, set up the consent screen first:
+      External, app name "Vault", your email.)
+   2. Under **Authorized redirect URIs** add
+      `https://wsgugxneqffhidqsduzg.supabase.co/auth/v1/callback`.
+   3. Copy the **Client ID** and **Client secret** into Supabase →
+      **Authentication → Sign In / Providers → Google**, and enable it.
+   4. Supabase → **Authentication → Sign In / Providers**: turn on
+      **Allow manual linking** (so a guest can become a Google account
+      without losing games).
+   5. Supabase → **Authentication → URL Configuration**: add
+      `https://sterls.github.io/number-guesser/` to **Redirect URLs**
+      (and `http://localhost:5173/` for testing).
+4. **Publishing:** GitHub repo → **Settings → Pages → Source: GitHub
+   Actions**. Every push to `main` then tests, builds and publishes the game
+   to `https://sterls.github.io/number-guesser/` (see
+   [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
 
-## Leaderboard
-
-**🏆 Leaderboard** ranks players for each code length (3, 4 or 5 digits) two
-ways: **average guesses** per cracked code, and **fewest guesses** to crack a
-single code. Every row shows **games played** (with ✗ for games not
-cracked), so a great average from 2 games can be told apart from one over
-20. There's no minimum number of games.
-
-Each player on a phone chooses to join (nothing is sent until they do). After
-that, their totals are sent after every finished game, single player, daily
-or against a friend. **Remove** deletes their entry; deleting the player does
-too. Tap someone else's name to report it; three reports hide it.
-
-### Setting up the leaderboard (once)
-
-The leaderboard uses the same free Supabase project as Whoosh Blocks
-(`js/config.js`), with its own `vault_*` tables, so Whoosh Blocks isn't
-affected. Until this is done, the leaderboard screen says it can't load.
-
-1. In the Supabase project, open **SQL Editor → New query**.
-2. Paste the whole of [`supabase/setup.sql`](supabase/setup.sql) and press
-   **Run**. It's safe to run again after updates.
-
-What the database enforces: nicknames pass the same word filter as the game
-(`js/names.js`; `npm test` checks the lists match); totals must make sense
-(cracked ≤ played, at least one guess per crack); games played can only rise
-by about one every 15 seconds, so a burst of fake games is capped; entries
-idle for 12 months are deleted. The public can only call the `vault_*`
-functions, never read the tables or anyone's id. Codes are checked on the
-phone, so a determined cheater could still send made-up results; hide a
-name in **Table Editor → vault_scores → hidden**.
-
-## Players and stats
-
-Add everyone who plays on the phone (tap **Playing as …** on the home
-screen). Each player's finished games are stored, and the Stats screen
-works these out from them, for one code length or all:
-
-- games played, % cracked, times given up
-- **average guesses per crack**, fewest guesses, average of the last 10 cracks
-- average time per crack
-- daily streak and best daily streak
-- a chart of guesses-to-crack
-- **favourite first guess**, favourite second guess, and favourite
-  **first two guesses together** (e.g. `1234 → 5678 ×7`), top 3 of each
-- **sharpness**: how often a guess (after the first) could still have been the
-  code given the feedback so far
-- record against friends (won / lost / drawn)
-- recent games, and an **All players** table to compare everyone
-
-Stats are calculated from the stored games (`js/stats.js`), so changing a
-formula re-counts every past game.
-
-## Files
-
-- `js/game.js`: the rules (scoring, daily code, possible codes). No screen code.
-- `js/stats.js`: player stats from the list of finished games.
-- `js/pvp.js`: rules for playing a friend (who wins, fingerprint checks, same-code seeds).
-- `js/room-net.js`: the live room connection (Supabase Realtime, or a
-  BroadcastChannel with `?localroom`).
-- `js/leaderboard.js`, `js/names.js`, `supabase/setup.sql`: the online
-  leaderboard, the nickname filter and the database setup.
-- `privacy.html`: the privacy policy (linked from Settings and the leaderboard).
-- `vendor/supabase.js`: a local copy of the Supabase library (MIT).
-- `js/storage.js`: players, games and settings in `localStorage`.
-- `js/main.js`: screens and controls.
-- `sw.js`: offline copy and the "new version ready" bar.
+Until steps 1–2 are done the game still works offline (single player, not
+ranked). Until step 3 is done, everything works except the Google button.
 
 ## Developing
 
+TypeScript, built with Vite. Needs Node 22.
+
 ```bash
-npm start   # serves the game at http://localhost:8080
-npm test    # rules, stats, play-a-friend, syntax and version checks
+npm install
+npm run dev      # the game at http://localhost:5173, against the real Supabase project
+npm test         # type check + unit tests (rules, stats, name filter)
+npm run build    # production build in dist/
 ```
 
-After changing any file listed in `sw.js`, run `npm run stamp` so installed
-copies notice the update (`npm test` fails if you forget).
+Server tests run `supabase/setup.sql` against a local Postgres with a small
+stand-in for Supabase's auth (never point them at a real database: they
+wipe it):
 
-## Installing on an Android phone
+```bash
+PGHOST=/tmp/vaultpg PGPORT=5499 PGUSER=postgres npm run test:sql
+```
 
-Open the game's link in **Chrome**, tap **⋮ → Add to Home screen** (or
-**Install app**), then open it from the new icon.
+`scripts/fake-supabase.mjs` serves guest sign-in and the `vault_*` functions
+from that local Postgres, for testing the whole game without Supabase: build
+with `VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_KEY=test`.
 
-## Hosting (GitHub Pages)
+### Files
 
-Plain static files, no build step. In the repository on GitHub go to
-**Settings → Pages**, set **Source** to *Deploy from a branch*, choose the
-branch and `/ (root)`, and save.
+- `src/main.ts`: start-up. `src/app.ts`: which screen is showing.
+- `src/screens/`: one file per screen (`home`, `play` for daily and single
+  player, `room` for playing a friend, `board`, `stats`, `account`, `settings`).
+- `src/ui/board.ts`: the game screen (guesses, keypad, notes) shared by every
+  mode. `src/ui/feel.ts`: sounds (made with Web Audio) and vibration.
+- `src/lib/`: rules, stats and the name filter, with no screen code.
+- `src/net/`: Supabase: accounts (`supabase.ts`), server calls (`api.ts`),
+  the live room line (`live.ts`).
+- `src/store.ts`: what the phone keeps (settings, offline games, a copy of
+  your history). Games from the version before accounts are kept here as
+  unranked history.
+- `supabase/setup.sql`: tables and functions; `scripts/test-sql.mjs` tests it.
+- `src/sw-template.js`: offline support; the build fills in the file list.
+- `public/privacy.html`: privacy policy.
+
+## Installing on a phone
+
+Open the game's link in Chrome (Android) or Safari (iPhone), then **Add to
+Home screen** / **Install app**. It runs full screen and works offline.
