@@ -45,7 +45,6 @@
   <section id="home" class="screen">
     <div class="logo" aria-hidden="true">
       <span class="tile">4</span><span class="tile">7</span><span class="tile">?</span><span class="tile">?</span>
-      <div class="logo-pegs"><i class="peg exact"></i><i class="peg exact"></i><i class="peg close"></i><i class="peg"></i></div>
     </div>
     <h1>Vault</h1>
     <p class="tagline">Crack the code to open the vault.</p>
@@ -84,13 +83,14 @@
       <h2 id="game-title">Daily</h2>
       <button id="giveup-btn" class="icon-btn" aria-label="Give up"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
     </div>
-    <p class="legend">
-      <span><i class="peg exact"></i> right digit, right spot</span>
-      <span><i class="peg close"></i> right digit, wrong spot</span>
-    </p>
+    <div id="guess-head" class="guess-head grid hidden" aria-hidden="true">
+      <span></span><span>Your guess</span>
+      <span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span>
+    </div>
     <ol id="guesses" class="guesses"></ol>
     <div class="entry">
       <div id="slots" class="slots"></div>
+      <p id="feedback-msg" class="feedback-msg" role="status" aria-live="polite"></p>
       <p id="entry-msg" class="entry-msg" role="status"></p>
       <div id="notes" class="notes" aria-label="Notes: tap a digit to mark it out or in"></div>
       <div id="keypad" class="keypad"></div>
@@ -124,15 +124,17 @@
     </div>
     <div class="scroll prose">
       <p>There's a secret code of <b>4 digits</b>, all different (like <b>0472</b>). Crack it in as few guesses as you can.</p>
-      <p>After each guess you get pegs:</p>
-      <p><i class="peg exact"></i> <b>Green</b>: one of your digits is right <b>and in the right spot</b>.</p>
-      <p><i class="peg close"></i> <b>Yellow</b>: one of your digits is in the code, <b>but in a different spot</b>.</p>
-      <p>The pegs don't say <em>which</em> digits they mean. That's the puzzle.</p>
+      <p>After each guess you get two numbers:</p>
+      <p><span class="count exact">1</span> <b>Right spot</b>: how many of your digits are in the code <b>and in the right place</b>.</p>
+      <p><span class="count close">2</span> <b>Wrong spot</b>: how many of your digits are in the code <b>but in a different place</b>.</p>
+      <p>They're totals for the whole guess. They don't say <em>which</em> digits they mean: working that out is the puzzle.</p>
       <div class="example">
-        <p>Code <b>0472</b>, you guess <b>4502</b>:</p>
-        <p class="example-row"><span class="tiles"><span class="tile">4</span><span class="tile">5</span><span class="tile">0</span><span class="tile">2</span></span> <span class="pegs"><i class="peg exact"></i><i class="peg close"></i><i class="peg close"></i><i class="peg"></i></span></p>
-        <p>The 2 is in the right spot (green). The 4 and 0 are in the code but elsewhere (yellow). The 5 isn't in it.</p>
+        <p>The code is <b>0472</b> and you guess <b>4502</b>:</p>
+        <div class="guess-head grid"><span></span><span>Your guess</span><span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span></div>
+        <div class="guess-row grid"><span class="num">1</span><span class="tiles"><span class="tile">4</span><span class="tile">5</span><span class="tile">0</span><span class="tile">2</span></span><span class="count exact">1</span><span class="count close">2</span></div>
+        <p>The 2 is in the right spot. The 4 and the 0 are in the code but in other places. The 5 isn't in the code. You're only told <b>1</b> and <b>2</b>, though, not which digits they are.</p>
       </div>
+      <p>The line under your guesses spells out the latest result in words. Tap any earlier guess to see its result again.</p>
       <p><b>Notes:</b> tap a digit in the notes row to mark it ✕ (not in the code), tap again for ✓ (in the code), and again to clear.</p>
       <p><b>Daily:</b> everyone gets the same 4-digit code each day, one try per player. <b>Practice:</b> as many as you like, 3, 4 or 5 digits.</p>
       <p><b>Players:</b> add everyone who plays on this phone. Each player gets their own stats: average guesses, favourite opening guesses, streaks and more.</p>
@@ -151,7 +153,7 @@
         <span>Practice code length</span>
         <div id="length-chips" class="chips" role="group" aria-label="Practice code length"></div>
       </div>
-      <label class="setting"><span>Show how many codes are still possible<small>A helper for learning. Off by default.</small></span><input id="set-left" type="checkbox"></label>
+      <label class="setting"><span>Show how many codes are still possible<small>Added to the result line. A helper for learning. Off by default.</small></span><input id="set-left" type="checkbox"></label>
       <label class="setting"><span>Vibrate</span><input id="set-vibrate" type="checkbox"></label>
     </div>
     <p class="fine">Everything is saved on this phone only. No ads, no tracking, no accounts.</p>

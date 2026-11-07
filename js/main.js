@@ -1,6 +1,6 @@
 import {
   LENGTHS, DAILY_LENGTH, makeSecret, dailySecret, todayKey, dailyNumber,
-  score, guessProblem, remaining,
+  score, guessProblem, remaining, explain,
 } from './game.js';
 import { computeStats } from './stats.js';
 import { load, save, newId, nameProblem } from './storage.js';
@@ -201,10 +201,20 @@ document.addEventListener('visibilitychange', () => {
   else resumedAt = performance.now();
 });
 
-function pegsHtml(length, { exact, close }) {
-  let html = '';
-  for (let i = 0; i < length; i++) html += `<i class="peg${i < exact ? ' exact' : i < exact + close ? ' close' : ''}"></i>`;
-  return html;
+// The two feedback numbers for a guess, in the "Right spot" and "Wrong spot" columns.
+function countsHtml({ exact, close }) {
+  return `<span class="count exact${exact ? '' : ' zero'}">${exact}</span><span class="count close${close ? '' : ' zero'}">${close}</span>`;
+}
+
+function showExplanation(i) {
+  const g = game.guesses[i];
+  let text = explain(g, score(game.secret, g));
+  if (data.settings.showLeft) {
+    const n = remaining(game.secret, game.guesses.slice(0, i + 1));
+    text += ` ${n.toLocaleString()} possible code${n === 1 ? '' : 's'} left.`;
+  }
+  $('feedback-msg').textContent = text;
+  document.querySelectorAll('.guess-row').forEach((row, j) => row.classList.toggle('picked', j === i));
 }
 
 function tilesHtml(code) {
@@ -220,15 +230,17 @@ function renderGame(justGuessed = false) {
   game.guesses.forEach((g, i) => {
     const s = score(game.secret, g);
     const li = document.createElement('li');
-    li.className = `guess-row len${game.length}${justGuessed && i === game.guesses.length - 1 ? ' new' : ''}`;
-    const left = data.settings.showLeft ? `<small class="left">${remaining(game.secret, game.guesses.slice(0, i + 1)).toLocaleString()} left</small>` : '';
-    li.innerHTML = `<span class="num">${i + 1}</span><span class="tiles">${tilesHtml(g)}</span>
-      <span class="pegs" style="--cols:${Math.ceil(game.length / 2)}" aria-label="${s.exact} right spot, ${s.close} wrong spot">${pegsHtml(game.length, s)}</span>${left}`;
+    li.className = `guess-row grid len${game.length}${justGuessed && i === game.guesses.length - 1 ? ' new' : ''}`;
+    li.setAttribute('aria-label', explain(g, s));
+    li.innerHTML = `<span class="num">${i + 1}</span><span class="tiles">${tilesHtml(g)}</span>${countsHtml(s)}`;
+    li.onclick = () => showExplanation(i);
     list.appendChild(li);
   });
+  $('guess-head').classList.toggle('hidden', !game.guesses.length);
+  $('feedback-msg').textContent = '';
   if (!game.guesses.length) {
-    list.innerHTML = `<li class="empty">Type any ${game.length} different digits to start.</li>`;
-  }
+    list.innerHTML = `<li class="empty">Type any ${game.length} different digits to start.<br>After each guess you'll see how many of your digits are in the <b class="t-exact">right spot</b> and how many are in the code but in the <b class="t-close">wrong spot</b>.</li>`;
+  } else showExplanation(game.guesses.length - 1);
   list.scrollTop = list.scrollHeight;
   renderEntry();
 }
@@ -335,9 +347,9 @@ function shareText(r) {
   const result = r.won ? `${r.guesses.length} guess${r.guesses.length === 1 ? '' : 'es'}` : 'gave up';
   const rows = r.guesses.map((g) => {
     const { exact, close } = score(r.secret, g);
-    return '🟢'.repeat(exact) + '🟡'.repeat(close) + '⚪'.repeat(r.length - exact - close);
+    return `🟢${exact} 🟡${close}`;
   });
-  return `${head} · ${result}\n${rows.join('\n')}`;
+  return `${head} · ${result}\n🟢 right spot · 🟡 wrong spot\n${rows.join('\n')}`;
 }
 
 function showResult(r) {
@@ -433,7 +445,7 @@ function renderStats() {
       </div>
 
       <h3>Sharpness <span class="score">${pct(s.sharpness)}</span></h3>
-      <p class="fine">How often a guess (after the first) could still have been the code, given the pegs so far. Higher means no wasted guesses.</p>
+      <p class="fine">How often a guess (after the first) could still have been the code, given the feedback so far. Higher means no wasted guesses.</p>
 
       <h3>Recent games</h3>
       <ul class="recent">${recent.map((g) => `

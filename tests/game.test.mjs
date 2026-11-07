@@ -60,3 +60,12 @@ test('possible codes shrink as guesses come in, and always include the secret', 
   }
   assert.ok(fits(secret, guesses, secret));
 });
+
+test('the result line explains the counts in words', async () => {
+  const { explain } = await import('../js/game.js');
+  assert.equal(explain('4502', score('0472', '4502')), '4502: 1 digit in the right spot, 2 in the code but in the wrong spot, 1 not in the code.');
+  assert.equal(explain('1356', score('0472', '1356')), '1356: none of 1, 3, 5, 6 are in the code.');
+  assert.equal(explain('2740', score('0472', '2740')), '2740: 4 digits in the code but in the wrong spot.');
+  assert.equal(explain('0472', score('0472', '0472')), '0472: all 4 digits in the right spot!');
+  assert.equal(explain('0123', score('0472', '0123')), '0123: 1 digit in the right spot, 1 in the code but in the wrong spot, 2 not in the code.');
+});

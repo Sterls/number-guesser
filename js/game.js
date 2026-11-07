@@ -101,3 +101,17 @@ export function fits(code, guesses, secret) {
 export function remaining(secret, guesses) {
   return allCodes(secret.length).filter((c) => fits(c, guesses, secret)).length;
 }
+
+const digitWord = (n) => `${n} digit${n === 1 ? '' : 's'}`;
+
+// The feedback in plain words, e.g. "4502: 1 digit in the right spot, 2 in the code but in the wrong spot, 1 not in the code."
+export function explain(guess, { exact, close } = {}) {
+  const none = guess.length - exact - close;
+  if (exact === guess.length) return `${guess}: all ${guess.length} digits in the right spot!`;
+  if (!exact && !close) return `${guess}: none of ${[...guess].join(', ')} are in the code.`;
+  const parts = [];
+  if (exact) parts.push(`${digitWord(exact)} in the right spot`);
+  if (close) parts.push(`${exact ? close : digitWord(close)} in the code but in the wrong spot`);
+  if (none) parts.push(`${none} not in the code`);
+  return `${guess}: ${parts.join(', ')}.`;
+}
