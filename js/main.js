@@ -22,7 +22,7 @@ let resumedAt = null;  // when the clock last started for `game`
 let waitingWorker = null;
 let statsPlayerId = '';
 let statsLength = DAILY_LENGTH;
-let gameView = 'solo'; // what the game screen shows: 'solo' (daily/practice) or 'pvp' (playing a friend)
+let gameView = 'solo'; // what the game screen shows: 'solo' (daily/single player) or 'pvp' (playing a friend)
 let resultKind = 'solo';
 let pendingRoom = null; // room code from an invite link, joined once there's a player
 
@@ -96,7 +96,7 @@ function renderHome() {
   $('daily-btn').textContent = done
     ? `Daily #${n} ${done.won ? `✓ ${done.guesses.length} guesses` : '✗'}`
     : live ? `Continue daily #${n}` : `Daily code #${n}`;
-  $('practice-btn').textContent = p?.inProgress?.practice ? 'Continue practice' : 'Practice';
+  $('practice-btn').textContent = p?.inProgress?.practice ? 'Continue single player' : 'Single player';
   $('versus-btn').classList.toggle('hidden', !online());
   $('versus-btn').textContent = vs ? `⚔️ Back to room ${vs.code}` : '⚔️ Play a friend';
 }
@@ -267,7 +267,7 @@ function renderGame(justGuessed = false) {
   $('entry').classList.remove('hidden');
   $('game-title').textContent = game.mode === 'daily'
     ? `Daily #${dailyNumber(game.date)}`
-    : `Practice · ${game.length} digits`;
+    : `Single player · ${game.length} digits`;
   const list = $('guesses');
   list.innerHTML = '';
   game.guesses.forEach((g, i) => {
@@ -403,7 +403,7 @@ function formatTime(ms) {
 }
 
 function shareText(r) {
-  const head = r.mode === 'daily' ? `Vault #${dailyNumber(r.date)}` : `Vault practice (${r.length} digits)`;
+  const head = r.mode === 'daily' ? `Vault #${dailyNumber(r.date)}` : `Vault single player (${r.length} digits)`;
   const result = r.won ? `${r.guesses.length} guess${r.guesses.length === 1 ? '' : 'es'}` : 'gave up';
   const rows = r.guesses.map((g) => {
     const { exact, close } = score(r.secret, g);
@@ -1005,7 +1005,7 @@ function renderStats() {
 
       <h3>Recent games</h3>
       <ul class="recent">${recent.map((g) => `
-        <li><span>${g.mode === 'daily' ? `Daily #${dailyNumber(g.date)}` : g.mode === 'pvp' ? `vs ${esc(g.opponent)} · ${{ win: 'won', lose: 'lost', draw: 'draw' }[g.result]}` : `Practice · ${g.length}`}</span>
+        <li><span>${g.mode === 'daily' ? `Daily #${dailyNumber(g.date)}` : g.mode === 'pvp' ? `vs ${esc(g.opponent)} · ${{ win: 'won', lose: 'lost', draw: 'draw' }[g.result]}` : `Single player · ${g.length}`}</span>
         <span class="tiles small">${tilesHtml(g.secret || '?'.repeat(g.length))}</span>
         <b>${g.won ? `${g.guesses.length} guesses` : g.mode === 'pvp' ? 'not cracked' : 'gave up'}</b></li>`).join('')}
       </ul>`;

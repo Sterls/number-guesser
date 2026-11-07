@@ -17,7 +17,7 @@ as "this dot is about this digit", which is not how the feedback works.
 
 - **Daily code:** the same 4-digit code for everyone each day (one try per
   player). Share your result (one `🟢1 🟡2` line per guess).
-- **Practice:** as many games as you like, with 3, 4 or 5 digits (Settings).
+- **Single player:** as many games as you like, with 3, 4 or 5 digits (Settings).
 - **⚔️ Play a friend:** see below.
 - **Notes row:** tap a digit to mark it ✕ (out), again for ✓ (in), again to clear.
 - **Give up** (flag button) shows the code. It counts as a loss.
