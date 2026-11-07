@@ -53,7 +53,7 @@ export function countsHtml(f: Feedback | null): string {
 }
 
 export function rowsHtml(rows: Row[], justGuessed: boolean, theirs = false): string {
-  return rows.map((r, i) => `<li class="guess-row grid len${r.guess.length}${justGuessed && i === rows.length - 1 ? ' new' : ''}${theirs ? ' theirs' : ''}" data-i="${i}">
+  return rows.map((r, i) => `<li class="guess-row grid len${r.guess.length}${justGuessed && i === rows.length - 1 ? ' new' : ''}${theirs ? ' theirs' : ''}${r.feedback?.exact === r.guess.length ? ' win' : ''}" data-i="${i}">
     <span class="num">${i + 1}</span><span class="tiles">${tilesHtml(r.guess)}</span>${countsHtml(r.feedback)}</li>`).join('');
 }
 

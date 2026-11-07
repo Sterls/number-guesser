@@ -5,7 +5,7 @@
 import { show, register } from '../app';
 import { $, on, ask, toast, formatTime, plural } from '../ui/dom';
 import { feel } from '../ui/feel';
-import { confetti } from '../ui/confetti';
+import { celebrate, CONFETTI } from '../ui/celebrate';
 import { renderGame, rowsHtml, setController, tilesHtml, type Controller, type Row } from '../ui/board';
 import { api, online, ApiError } from '../net/api';
 import { data, save, settings, type OfflineGame } from '../store';
@@ -14,7 +14,7 @@ import { computeStats, type PlayedGame } from '../lib/stats';
 import type { ServerGame } from '../lib/types';
 import { account, addFinished, allGames, loadStreak, playerName } from '../account';
 
-export const CONFETTI = ['#3ccf7e', '#f2b632', '#d4a24c', '#e8ecf4', '#7aa7ff'];
+export { CONFETTI };
 
 const leftText = (length: number, guesses: string[], feedback: Row['feedback'][], i: number) => {
   if (!settings().showLeft || !feedback[i]) return '';
@@ -49,7 +49,7 @@ function serverController(start: ServerGame): Controller {
         return e instanceof ApiError && e.offline ? 'No connection, so that guess wasn\'t sent. Try again.' : (e as Error).message;
       }
       const last = g.guesses[g.guesses.length - 1];
-      if (g.cracked) feel.open(); else feel.guess(last.exact, last.close);
+      if (!g.cracked) feel.guess(last.exact, last.close);
       renderGame(true);
       if (g.finished) finishServer(g);
     },
@@ -82,9 +82,14 @@ function finishServer(g: ServerGame) {
   delete data.notes[g.id];
   addFinished(g);
   void loadStreak();
-  if (g.cracked) confetti(CONFETTI);
-  else feel.fail();
-  setTimeout(() => showSoloResult(fromServer(g), g.mode === 'daily'), g.cracked ? 700 : 300);
+  const n = g.guesses.length;
+  if (g.cracked) {
+    void celebrate(n === 1 ? 'First try!' : 'Cracked!', `${g.mode === 'daily' ? 'Daily code' : 'Code'} cracked in ${plural(n, 'guess')}`, g.secret || '')
+      .then(() => showSoloResult(fromServer(g), g.mode === 'daily', g));
+  } else {
+    feel.fail();
+    setTimeout(() => showSoloResult(fromServer(g), g.mode === 'daily', g), 300);
+  }
 }
 
 const fromServer = (g: ServerGame) => allGames().find((x) => x.ranked && x.at === Date.parse(g.finished_at || '')) || null;
@@ -154,7 +159,7 @@ function offlineController(g: OfflineGame): Controller {
       g.guesses.push(code);
       save();
       const f = score(g.secret, code);
-      if (code === g.secret) feel.open(); else feel.guess(f.exact, f.close);
+      if (code !== g.secret) feel.guess(f.exact, f.close);
       renderGame(true);
       if (code === g.secret) finishOffline(g, true);
     },
@@ -184,8 +189,9 @@ function finishOffline(g: OfflineGame, won: boolean) {
   data.local.push(record);
   data.offline = null;
   save();
-  if (won) confetti(CONFETTI); else feel.fail();
-  setTimeout(() => showSoloResult(record, false), won ? 700 : 300);
+  const n = record.guesses.length;
+  if (won) void celebrate(n === 1 ? 'First try!' : 'Cracked!', `Code cracked in ${plural(n, 'guess')}`, g.secret).then(() => showSoloResult(record, false));
+  else { feel.fail(); setTimeout(() => showSoloResult(record, false), 300); }
 }
 
 // ---------- result ----------

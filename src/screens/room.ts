@@ -8,6 +8,7 @@ import { show, register, screen, onLeave } from '../app';
 import { $, on, ask, toast, esc, plural, busy, formatTime } from '../ui/dom';
 import { feel } from '../ui/feel';
 import { confetti } from '../ui/confetti';
+import { celebrate, afterCelebration } from '../ui/celebrate';
 import { renderGame, rowsHtml, setController, tilesHtml, controller, type Controller, type Row } from '../ui/board';
 import { api, online, ApiError } from '../net/api';
 import { joinLive, type Live } from '../net/live';
@@ -122,9 +123,12 @@ function update(state: RoomState) {
   if (!state.playing && state.mine && shownResultFor !== key) {
     shownResultFor = key;
     addFinished(state.mine);
-    if (state.mine.place === 1 && state.mine.cracked) confetti(CONFETTI);
-    else if (!state.mine.cracked) feel.fail();
-    setTimeout(showRoomResult, 600);
+    const won = state.mine.place === 1 && state.mine.cracked;
+    void afterCelebration().then(() => {
+      if (won) confetti(CONFETTI);
+      else if (!state.mine?.cracked) feel.fail();
+      setTimeout(showRoomResult, 400);
+    });
   }
   redraw();
 }
@@ -334,8 +338,9 @@ function roomController(): Controller {
       try {
         const g = await api.guess(g0.id, code);
         const last = g.guesses[g.guesses.length - 1];
-        if (g.cracked) feel.open(); else feel.guess(last.exact, last.close);
+        if (!g.cracked) feel.guess(last.exact, last.close);
         const state = await api.roomState(room.id);
+        if (g.cracked) void celebrate(g.guesses.length === 1 ? 'First try!' : 'Cracked!', crackedLine(state, g.guesses.length));
         if (state) update(state);
         renderGame(true);
         live?.poke();
@@ -384,6 +389,19 @@ function roomController(): Controller {
     action: 'gear',
     onAction: openRoomMenu,
   };
+}
+
+// "in 4 guesses · 1st so far (2 of 5 cracked)"
+function crackedLine(state: RoomState | null, n: number): string {
+  const base = `Cracked in ${plural(n, 'guess')}`;
+  if (!state) return base;
+  const players = state.players.filter((p) => p.in_round);
+  const cracked = players.filter((p) => p.cracked);
+  const me = cracked.find((p) => p.me);
+  if (!me) return base;
+  const ahead = cracked.filter((p) => !p.me && (p.count < me.count || (p.count === me.count && (p.ms ?? 0) < (me.ms ?? 0)))).length;
+  const stillGoing = players.length - players.filter((p) => p.finished).length;
+  return `${base} · ${ordinal(ahead + 1)}${stillGoing ? ' so far' : ''}`;
 }
 
 async function endRound() {
