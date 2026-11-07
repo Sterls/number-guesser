@@ -91,6 +91,7 @@ function renderHome() {
 
 on('player-chip', 'click', () => show('players'));
 on('help-btn', 'click', () => show('help'));
+on('help-done', 'click', () => show('home'));
 on('settings-btn', 'click', () => show('settings'));
 on('stats-btn', 'click', () => { statsPlayerId = data.currentId; show('stats'); });
 

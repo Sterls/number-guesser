@@ -140,7 +140,6 @@ button:disabled { cursor: default; }
 .count.exact { background: var(--exact); }
 .count.close { background: var(--close); }
 .count.zero { background: transparent; box-shadow: inset 0 0 0 2px #dcd9ee; color: #b3b0cc; }
-.prose .count { width: 30px; height: 30px; font-size: 17px; }
 .t-exact { color: var(--exact-ink); }
 .t-close { color: var(--close-ink); }
 
@@ -286,10 +285,35 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); text-transform: u
 
 /* ---------- help & settings ---------- */
 
-.prose { font-size: 17px; line-height: 1.5; }
-.example { background: #fff; border-radius: 18px; padding: 4px 16px; margin: 16px 0; }
-.example .guess-head { padding-top: 0; }
-.example .guess-row { cursor: default; }
+/* How to play: three short steps. */
+.tutorial { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; }
+.step {
+  background: #fff; border-radius: 20px; padding: 16px 14px;
+  box-shadow: 0 6px 18px rgba(43, 42, 74, 0.06);
+}
+.step p { margin: 0; }
+.step > div { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.step-num {
+  width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; flex-shrink: 0; font-size: 16px;
+  background: var(--accent); color: #fff; font-weight: 800;
+}
+.step-title { font-size: 19px; font-weight: 800; line-height: 1.25; display: flex; align-items: center; gap: 10px; }
+.step .fine { font-size: 15px; color: var(--ink-soft); }
+.tile.lock { background: var(--ink); color: #fff; }
+.step .guess-head { padding: 0 8px; }
+.step .guess-row { cursor: default; padding: 6px 8px; background: #f6f5fd; }
+.step .grid { grid-template-columns: 0 1fr 48px 48px; column-gap: 6px; }
+.step .tiles .tile { width: 36px; height: 42px; font-size: 22px; }
+.why { font-size: 15px; color: var(--ink-soft); }
+.why-list { list-style: none; margin: -4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.why-list li { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 360px) {
+  .step .tiles .tile { width: 32px; height: 38px; font-size: 20px; }
+  .step .grid { grid-template-columns: 0 1fr 44px 44px; }
+  .step .count:not(.mini) { width: 36px; height: 36px; font-size: 19px; }
+}
+.count.mini { width: 24px; height: 24px; font-size: 14px; flex-shrink: 0; box-shadow: none; }
+#help-done { align-self: center; margin-top: 6px; }
 
 .settings-card { margin-top: 18px; display: flex; flex-direction: column; gap: 18px; }
 .setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 17px; font-weight: 600; }

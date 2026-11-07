@@ -122,22 +122,36 @@
       <h2>How to play</h2>
       <div class="bar-spacer"></div>
     </div>
-    <div class="scroll prose">
-      <p>There's a secret code of <b>4 digits</b>, all different (like <b>0472</b>). Crack it in as few guesses as you can.</p>
-      <p>After each guess you get two numbers:</p>
-      <p><span class="count exact">1</span> <b>Right spot</b>: how many of your digits are in the code <b>and in the right place</b>.</p>
-      <p><span class="count close">2</span> <b>Wrong spot</b>: how many of your digits are in the code <b>but in a different place</b>.</p>
-      <p>They're totals for the whole guess. They don't say <em>which</em> digits they mean: working that out is the puzzle.</p>
-      <div class="example">
-        <p>The code is <b>0472</b> and you guess <b>4502</b>:</p>
-        <div class="guess-head grid"><span></span><span>Your guess</span><span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span></div>
-        <div class="guess-row grid"><span class="num">1</span><span class="tiles"><span class="tile">4</span><span class="tile">5</span><span class="tile">0</span><span class="tile">2</span></span><span class="count exact">1</span><span class="count close">2</span></div>
-        <p>The 2 is in the right spot. The 4 and the 0 are in the code but in other places. The 5 isn't in the code. You're only told <b>1</b> and <b>2</b>, though, not which digits they are.</p>
+    <div class="scroll tutorial">
+      <div class="step">
+        <div>
+          <p class="step-title"><span class="step-num">1</span>Crack the secret code</p>
+          <p class="tiles"><span class="tile lock">?</span><span class="tile lock">?</span><span class="tile lock">?</span><span class="tile lock">?</span></p>
+          <p class="fine">4 digits. No digit is used twice.</p>
+        </div>
       </div>
-      <p>The line under your guesses spells out the latest result in words. Tap any earlier guess to see its result again.</p>
-      <p><b>Notes:</b> tap a digit in the notes row to mark it ✕ (not in the code), tap again for ✓ (in the code), and again to clear.</p>
-      <p><b>Daily:</b> everyone gets the same 4-digit code each day, one try per player. <b>Practice:</b> as many as you like, 3, 4 or 5 digits.</p>
-      <p><b>Players:</b> add everyone who plays on this phone. Each player gets their own stats: average guesses, favourite opening guesses, streaks and more.</p>
+
+      <div class="step">
+        <div>
+          <p class="step-title"><span class="step-num">2</span>Each guess gets two numbers</p>
+          <div class="guess-head grid"><span></span><span>Guess</span><span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span></div>
+          <div class="guess-row grid"><span class="num"></span><span class="tiles"><span class="tile">4</span><span class="tile">5</span><span class="tile">0</span><span class="tile">2</span></span><span class="count exact">1</span><span class="count close">2</span></div>
+          <p class="why">If the code were <b>0 4 7 2</b>:</p>
+          <ul class="why-list">
+            <li><span class="count exact mini">1</span><span>the <b>2</b> is in the right spot</span></li>
+            <li><span class="count close mini">2</span><span>the <b>4</b> and <b>0</b> are in the code, but in other spots</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step">
+        <div>
+          <p class="step-title"><span class="step-num">3</span>Work out which digits they mean</p>
+          <p class="fine">You only see the numbers, not which digits. Get <span class="count exact mini">4</span> to win.</p>
+        </div>
+      </div>
+
+      <button id="help-done" class="btn">Got it</button>
     </div>
   </section>
 
