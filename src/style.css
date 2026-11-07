@@ -472,3 +472,6 @@ h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); text-transform: u
 #error { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; text-align: center; font-size: 19px; line-height: 1.5; background: var(--bg-bottom); }
 #error p { margin: 0 0 14px; }
 .error-detail { margin-top: 18px !important; font-size: 12px; color: var(--ink-soft); word-break: break-word; }
+
+.offline-note p { margin: 0; }
+.offline-note .link { margin-top: 4px; color: #ffd0d0; text-decoration: underline; }

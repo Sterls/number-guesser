@@ -19,6 +19,9 @@ const MERGE_KEY = 'vault-merge-token';
 const SWITCHING_KEY = 'vault-switching-to-google';
 
 let user: User | null = null;
+let problem = '';
+// Why there's no account (shown on the home screen), or ''.
+export const sessionProblem = () => problem;
 export const currentUser = () => user;
 export const isGuest = () => Boolean(user?.is_anonymous);
 export const email = () => user?.email || user?.identities?.find((i) => i.provider === 'google')?.identity_data?.email || '';
@@ -51,7 +54,11 @@ export async function startSession(): Promise<string> {
 
   if (!user) {
     const { data: anon, error } = await supabase.auth.signInAnonymously();
-    if (error) return navigator.onLine ? `Couldn't start an account (${error.message}).` : '';
+    if (error) {
+      problem = navigator.onLine ? error.message : '';
+      return '';
+    }
+    problem = '';
     user = anon.user;
   }
   return '';

@@ -5,8 +5,8 @@ import { $, on } from '../ui/dom';
 import { data } from '../store';
 import { dailyNumber, todayKey } from '../lib/game';
 import { online } from '../net/api';
-import { configured, isGuest } from '../net/supabase';
-import { account, allGames, playerName } from '../account';
+import { configured, isGuest, sessionProblem, startSession } from '../net/supabase';
+import { account, allGames, loadMe, loadStreak, playerName, refreshHistory } from '../account';
 import { startDaily, startSingle } from './play';
 import { openRoom } from './room';
 
@@ -23,6 +23,13 @@ function renderHome() {
   $('streak').classList.toggle('hidden', !account.streak);
   const isOnline = online();
   $('offline-note').classList.toggle('hidden', isOnline || !configured);
+  // Online but no account: say why (usually a Supabase setting) instead of "offline".
+  const problem = navigator.onLine ? sessionProblem() : '';
+  $('offline-text').textContent = problem
+    ? `⚠️ Couldn't connect to the game server (${problem}). Single player still works, but won't count on the leaderboard.`
+    : navigator.onLine ? '⚠️ Connecting to the game server…'
+      : "📴 You're offline. Single player still works, but won't count on the leaderboard.";
+  $('retry-btn').classList.toggle('hidden', !navigator.onLine);
   $('daily-btn').classList.toggle('dim', !isOnline);
   $('versus-btn').classList.toggle('hidden', !configured);
   $('versus-btn').classList.toggle('dim', !isOnline);
@@ -42,6 +49,15 @@ on('board-btn', 'click', () => show('board'));
 on('daily-btn', 'click', () => void startDaily($('daily-btn')));
 on('practice-btn', 'click', () => void startSingle($('practice-btn')));
 on('versus-btn', 'click', () => openRoom());
+on('retry-btn', 'click', async () => {
+  $('retry-btn').textContent = 'Trying…';
+  await startSession().catch(() => '');
+  await loadMe();
+  void refreshHistory();
+  void loadStreak();
+  $('retry-btn').textContent = 'Try again';
+  renderHome();
+});
 
 window.addEventListener('online', () => { if (!$('home').classList.contains('hidden')) renderHome(); });
 window.addEventListener('offline', () => { if (!$('home').classList.contains('hidden')) renderHome(); });
