@@ -6,9 +6,10 @@ const testTab = typeof location !== 'undefined' && new URLSearchParams(location.
 const KEY = `vault-save-v1${testTab ? `-${testTab}` : ''}`;
 
 const defaults = () => ({
-  players: [], // { id, name, created, games: [], inProgress: { daily, practice } }
+  players: [], // { id, name, created, games: [], inProgress: { daily, practice }, board?: { secret } }
   currentId: '',
   versus: null, // the room this phone is in when playing a friend (see js/main.js)
+  deviceId: '', // random id sent with leaderboard reports, so each phone reports a name once
   settings: { length: 4, showLeft: false, vibrate: true, seenHelp: false },
 });
 

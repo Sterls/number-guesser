@@ -68,6 +68,38 @@ To test two players without Supabase, open the game in two tabs of one
 browser with `?localroom=a` and `?localroom=b` in the address (each tab gets
 its own save).
 
+## Leaderboard
+
+**🏆 Leaderboard** ranks players for each code length (3, 4 or 5 digits) two
+ways: **average guesses** per cracked code, and **fewest guesses** to crack a
+single code. Every row shows **games played** (with ✗ for games not
+cracked), so a great average from 2 games can be told apart from one over
+20. There's no minimum number of games.
+
+Each player on a phone chooses to join (nothing is sent until they do). After
+that, their totals are sent after every finished game, single player, daily
+or against a friend. **Remove** deletes their entry; deleting the player does
+too. Tap someone else's name to report it; three reports hide it.
+
+### Setting up the leaderboard (once)
+
+The leaderboard uses the same free Supabase project as Whoosh Blocks
+(`js/config.js`), with its own `vault_*` tables, so Whoosh Blocks isn't
+affected. Until this is done, the leaderboard screen says it can't load.
+
+1. In the Supabase project, open **SQL Editor → New query**.
+2. Paste the whole of [`supabase/setup.sql`](supabase/setup.sql) and press
+   **Run**. It's safe to run again after updates.
+
+What the database enforces: nicknames pass the same word filter as the game
+(`js/names.js`; `npm test` checks the lists match); totals must make sense
+(cracked ≤ played, at least one guess per crack); games played can only rise
+by about one every 15 seconds, so a burst of fake games is capped; entries
+idle for 12 months are deleted. The public can only call the `vault_*`
+functions, never read the tables or anyone's id. Codes are checked on the
+phone, so a determined cheater could still send made-up results; hide a
+name in **Table Editor → vault_scores → hidden**.
+
 ## Players and stats
 
 Add everyone who plays on the phone (tap **Playing as …** on the home
@@ -96,6 +128,9 @@ formula re-counts every past game.
 - `js/pvp.js`: rules for playing a friend (who wins, fingerprint checks, same-code seeds).
 - `js/room-net.js`: the live room connection (Supabase Realtime, or a
   BroadcastChannel with `?localroom`).
+- `js/leaderboard.js`, `js/names.js`, `supabase/setup.sql`: the online
+  leaderboard, the nickname filter and the database setup.
+- `privacy.html`: the privacy policy (linked from Settings and the leaderboard).
 - `vendor/supabase.js`: a local copy of the Supabase library (MIT).
 - `js/storage.js`: players, games and settings in `localStorage`.
 - `js/main.js`: screens and controls.

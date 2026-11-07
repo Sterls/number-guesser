@@ -53,6 +53,7 @@
     <button id="practice-btn" class="btn secondary">Single player</button>
     <button id="versus-btn" class="btn secondary hidden">⚔️ Play a friend</button>
     <button id="stats-btn" class="btn secondary">📊 Stats</button>
+    <button id="board-btn" class="btn secondary hidden">🏆 Leaderboard</button>
     <div class="home-row">
       <button id="help-btn" class="btn ghost">How to play</button>
       <button id="settings-btn" class="btn ghost">Settings</button>
@@ -147,6 +148,29 @@
     <div id="vs-panel" class="vs-panel hidden" role="status"></div>
   </section>
 
+  <!-- Leaderboard -->
+  <section id="board" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Leaderboard</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <div class="board-controls">
+      <div id="board-order" class="who-switch big" role="tablist" aria-label="Rank by">
+        <button class="who" data-order="avg" role="tab">Average guesses</button>
+        <button class="who" data-order="best" role="tab">Fewest guesses</button>
+      </div>
+      <div id="board-length" class="chips" role="group" aria-label="Code length"></div>
+      <p id="board-explain" class="fine"></p>
+    </div>
+    <div class="scroll">
+      <div class="table-wrap"><table id="board-table" class="compare board-table"></table></div>
+      <p id="board-msg" class="fine center"></p>
+      <div id="board-join" class="card board-join"></div>
+      <p class="fine center"><a href="privacy.html">Privacy policy</a></p>
+    </div>
+  </section>
+
   <!-- Stats -->
   <section id="stats" class="screen hidden">
     <div class="bar">
@@ -220,7 +244,7 @@
       <label class="setting"><span>Show how many codes are still possible<small>Added to the result line. A helper for learning. Off by default.</small></span><input id="set-left" type="checkbox"></label>
       <label class="setting"><span>Vibrate</span><input id="set-vibrate" type="checkbox"></label>
     </div>
-    <p class="fine">Everything is saved on this phone only. No ads, no tracking, no accounts.</p>
+    <p class="fine">Games are saved on this phone. Nothing is shared unless a player joins the leaderboard or plays a friend. No ads, no tracking, no accounts. <a href="privacy.html">Privacy policy</a></p>
   </section>
 
   <!-- Result -->

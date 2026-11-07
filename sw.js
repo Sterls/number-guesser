@@ -8,11 +8,12 @@
 // VERSION is a fingerprint of the files below. Run `npm run stamp` after
 // changing any of them (`npm test` fails if you forget), so phones notice.
 
-const VERSION = 'dd39a06ef068';
+const VERSION = 'ae932a6b6c73';
 const CACHE = `vault-${VERSION}`;
 const ASSETS = [
   './',
   'index.html',
+  'privacy.html',
   'manifest.webmanifest',
   'css/style.css',
   'js/main.js',
@@ -23,6 +24,8 @@ const ASSETS = [
   'js/pvp.js',
   'js/room-net.js',
   'js/config.js',
+  'js/leaderboard.js',
+  'js/names.js',
   'vendor/supabase.js',
   'icons/icon-192.png',
   'icons/icon-512.png',

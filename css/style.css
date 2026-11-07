@@ -431,3 +431,23 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); text-transform: u
 }
 
 .btn.danger-text { color: var(--danger); }
+
+/* ---------- leaderboard ---------- */
+
+.board-controls { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 14px auto 10px; }
+.board-controls .fine { margin: 0; text-align: center; }
+.who-switch.big { width: 100%; }
+.who-switch.big .who { flex: 1; font-size: 13px; padding: 8px 6px; max-width: none; }
+.board-table th, .board-table td { padding: 9px 6px; }
+.board-table td.num, .board-table th.num { text-align: right; }
+.board-table .rank { color: var(--ink-soft); width: 28px; }
+.board-table td.sorted { font-weight: 800; color: var(--accent); font-size: 16px; }
+#board a, #settings a { color: var(--accent); font-weight: 600; }
+.board-table td.name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.board-table .miss { color: var(--ink-soft); font-size: 12px; font-weight: 400; }
+.board-table tr.me td { background: #f1efff; font-weight: 700; }
+.board-table tr.gap td { text-align: center; color: var(--ink-soft); padding: 2px; }
+.board-table tbody tr:not(.me):not(.gap) { cursor: pointer; }
+.board-join { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.board-join p { margin: 0; }
+.board-join .btn { align-self: center; }

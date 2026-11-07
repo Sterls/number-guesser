@@ -6,6 +6,8 @@ import {
   newRoomCode, cleanRoomCode, roomFromUrl, newSalt, fingerprint, crackedAt, outcome, checkReveal, sharedSecret,
 } from './pvp.js';
 import { joinRoom, online } from './room-net.js';
+import * as lb from './leaderboard.js';
+import { nameProblem as boardNameProblem } from './names.js';
 import { computeStats } from './stats.js';
 import { load, save, newId, nameProblem } from './storage.js';
 import { confetti } from './confetti.js';
@@ -32,14 +34,14 @@ const persist = () => save(data);
 
 // ---------- screens ----------
 
-const SCREENS = ['home', 'players', 'versus', 'game', 'stats', 'help', 'settings'];
+const SCREENS = ['home', 'players', 'versus', 'game', 'stats', 'board', 'help', 'settings'];
 function show(name) {
   if (screen === 'game' && name !== 'game' && gameView === 'solo') pauseClock();
   screen = name;
   for (const s of SCREENS) $(s).classList.toggle('hidden', s !== name);
   $('update-bar').classList.toggle('hidden', !waitingWorker || name === 'game');
   ({
-    home: renderHome, players: renderPlayers, stats: renderStats, settings: renderSettings, versus: renderVersus,
+    home: renderHome, players: renderPlayers, stats: renderStats, settings: renderSettings, versus: renderVersus, board: renderBoard,
     game: () => (gameView === 'pvp' ? renderVersusGame() : renderGame()),
   }[name] || (() => {}))();
 }
@@ -98,6 +100,7 @@ function renderHome() {
     : live ? `Continue daily #${n}` : `Daily code #${n}`;
   $('practice-btn').textContent = p?.inProgress?.practice ? 'Continue single player' : 'Single player';
   $('versus-btn').classList.toggle('hidden', !online());
+  $('board-btn').classList.toggle('hidden', !lb.isConfigured());
   $('versus-btn').textContent = vs ? `⚔️ Back to room ${vs.code}` : '⚔️ Play a friend';
 }
 
@@ -106,6 +109,7 @@ on('help-btn', 'click', () => show('help'));
 on('help-done', 'click', () => show('home'));
 on('settings-btn', 'click', () => show('settings'));
 on('stats-btn', 'click', () => { statsPlayerId = data.currentId; show('stats'); });
+on('board-btn', 'click', () => show('board'));
 
 on('daily-btn', 'click', () => {
   const p = player();
@@ -147,9 +151,15 @@ function renderPlayers() {
       p.name = name.trim();
       persist();
       renderPlayers();
+      if (p.board) {
+        lb.submit(p.board.secret, p.name, p.games, LENGTHS).catch((err) => {
+          if (err.nameRejected) toast(`The leaderboard doesn't allow that name, so it still shows ${p.name}'s old one.`);
+        });
+      }
     };
     li.querySelector('.delete').onclick = async () => {
       if (!await ask(`Delete ${p.name} and all their stats? This can't be undone.`, { yes: 'Delete' })) return;
+      if (p.board) lb.remove(p.board.secret).catch(() => {});
       data.players = data.players.filter((x) => x.id !== p.id);
       if (data.currentId === p.id) data.currentId = data.players[0]?.id || '';
       persist();
@@ -386,6 +396,7 @@ function finish(won) {
   p.games.push(record);
   delete p.inProgress[game.mode];
   persist();
+  syncBoard(p);
   game = null;
   if (won) {
     confetti(['#30a46c', '#f5b400', '#6c63ff', '#7cc6fe', '#ffb4a2']);
@@ -705,6 +716,7 @@ function recordVersus() {
     result: vs.result.result, opponent: oppName(),
   });
   vs.recordAt = at;
+  syncBoard(p);
 }
 
 // Once their code is revealed, check it against their fingerprint and feedback.
@@ -959,6 +971,132 @@ function showVersusResult() {
   $('result-stats-btn').textContent = 'See the guesses';
   $('result-home-btn').textContent = 'Leave room';
   $('result').classList.remove('hidden');
+}
+
+// ---------- leaderboard ----------
+
+let boardLength = DAILY_LENGTH;
+let boardOrder = 'avg'; // 'avg': average guesses per crack; 'best': fewest guesses in one game
+let boardSeq = 0;
+
+// Send a joined player's totals after each game. Failures are fine: the
+// next game sends the full totals again.
+function syncBoard(p) {
+  if (p?.board && lb.isConfigured()) lb.submit(p.board.secret, p.name, p.games, LENGTHS).catch(() => {});
+}
+
+async function renderBoard() {
+  $('board-order').querySelectorAll('.who').forEach((b) => {
+    b.classList.toggle('on', b.dataset.order === boardOrder);
+    b.onclick = () => { boardOrder = b.dataset.order; renderBoard(); };
+  });
+  const chips = $('board-length');
+  chips.innerHTML = '';
+  for (const len of LENGTHS) {
+    const b = document.createElement('button');
+    b.className = `chip${len === boardLength ? ' on' : ''}`;
+    b.textContent = `${len} digits`;
+    b.onclick = () => { boardLength = len; renderBoard(); };
+    chips.appendChild(b);
+  }
+  $('board-explain').textContent = boardOrder === 'avg'
+    ? 'Average guesses per cracked code. Lower is better.'
+    : 'Fewest guesses to crack a single code.';
+  renderBoardJoin();
+
+  const p = player();
+  const seq = ++boardSeq;
+  $('board-msg').textContent = 'Loading…';
+  let res;
+  try {
+    res = await lb.fetchBoard(boardLength, boardOrder, p?.board?.secret);
+  } catch {
+    if (seq === boardSeq) {
+      $('board-table').innerHTML = '';
+      $('board-msg').textContent = "Couldn't load the leaderboard. Check your internet and try again.";
+    }
+    return;
+  }
+  if (seq !== boardSeq || screen !== 'board') return;
+
+  const key = (col) => (col === boardOrder ? ' sorted' : '');
+  const row = (r) => {
+    const missed = r.played - r.cracked;
+    return `<tr class="${r.me ? 'me' : ''}" data-name="${esc(r.name)}">
+      <td class="rank">${r.rank}</td>
+      <td class="name">${esc(r.name)}</td>
+      <td class="num">${r.played}${missed ? ` <span class="miss" title="${missed} not cracked">✗${missed}</span>` : ''}</td>
+      <td class="num${key('avg')}">${Number(r.avg).toFixed(1)}</td>
+      <td class="num${key('best')}">${r.best}</td></tr>`;
+  };
+  const rows = res.top.map(row);
+  if (res.me && !res.top.some((r) => r.me)) rows.push('<tr class="gap"><td colspan="5">⋯</td></tr>', row(res.me));
+  $('board-table').innerHTML = rows.length ? `
+    <thead><tr><th>#</th><th>Player</th><th class="num">Games</th><th class="num">Avg</th><th class="num">Best</th></tr></thead>
+    <tbody>${rows.join('')}</tbody>` : '';
+  $('board-msg').textContent = rows.length
+    ? '✗ = games not cracked. Tap a name to report it.'
+    : `Nobody on the ${boardLength}-digit board yet.`;
+  $('board-table').querySelectorAll('tbody tr:not(.me):not(.gap)').forEach((tr) => {
+    tr.onclick = () => reportName(tr.dataset.name);
+  });
+}
+
+async function reportName(name) {
+  if (!await ask(`Report "${name}" as an inappropriate name?`, { yes: 'Report' })) return;
+  data.deviceId ||= newId();
+  persist();
+  try {
+    await lb.report(data.deviceId, name);
+    toast('Thanks. Names reported by several players are hidden.');
+  } catch {
+    toast("Couldn't send the report. Try again later.");
+  }
+}
+
+function renderBoardJoin() {
+  const p = player();
+  const box = $('board-join');
+  box.classList.toggle('hidden', !p);
+  if (!p) return;
+  const name = esc(p.name);
+  if (p.board) {
+    box.innerHTML = `<p><b>${name}</b> is on the leaderboard.</p>
+      <button id="board-remove" class="btn ghost danger-text">Remove ${name}</button>`;
+    $('board-remove').onclick = async () => {
+      if (!await ask(`Remove ${p.name} from the leaderboard?`, { yes: 'Remove' })) return;
+      try {
+        await lb.remove(p.board.secret);
+        delete p.board;
+        persist();
+        renderBoard();
+      } catch {
+        toast("Couldn't reach the leaderboard. Try again later.");
+      }
+    };
+  } else {
+    box.innerHTML = `<p><b>Put ${name} on the leaderboard?</b></p>
+      <p class="fine">Shares ${name}'s name, games played and guesses. Please don't use your real name.</p>
+      <button id="board-join-btn" class="btn">Join as ${name}</button>`;
+    $('board-join-btn').onclick = () => joinBoard(p);
+  }
+}
+
+async function joinBoard(p) {
+  const problem = boardNameProblem(p.name);
+  if (problem) return toast(`${problem} Rename ${p.name} on the Players screen.`);
+  const secret = newId();
+  try {
+    await lb.submit(secret, p.name, p.games, LENGTHS);
+  } catch (err) {
+    return toast(err.nameRejected
+      ? `That name isn't allowed. Rename ${p.name} on the Players screen.`
+      : "Couldn't reach the leaderboard. Try again later.");
+  }
+  p.board = { secret };
+  persist();
+  if (!p.games.some((g) => g.won)) toast(`${p.name} will show up after cracking a code.`);
+  renderBoard();
 }
 
 // ---------- stats ----------
