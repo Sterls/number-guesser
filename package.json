@@ -1,0 +1,10 @@
+{
+  "name": "code-crack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "stamp": "node scripts/stamp.mjs",
+    "start": "npx --yes http-server -c-1 -p 8080 ."
+  }
+}

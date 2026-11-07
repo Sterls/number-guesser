@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Code Crack – Number Code-Breaking Game</title>
+  <meta name="description" content="Code Crack: guess the secret number code. Green means right digit, right spot; yellow means right digit, wrong spot. Daily code, player stats, plays offline, no ads.">
+  <meta name="theme-color" content="#efe9ff">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // If the game can't start (an old or unusual browser), say so instead of
+    // leaving buttons that do nothing, and show why so it can be reported.
+    (function () {
+      function note(reason) {
+        var t = document.getElementById('toast');
+        if (!t) return;
+        t.textContent = 'Something went wrong: ' + reason;
+        t.classList.remove('hidden');
+        clearTimeout(note.timer);
+        note.timer = setTimeout(function () { t.classList.add('hidden'); }, 8000);
+      }
+      function fail(reason) {
+        if (window.crackReady) return note(reason);
+        var box = document.getElementById('error');
+        if (!box) return document.addEventListener('DOMContentLoaded', function () { fail(reason); });
+        box.classList.remove('hidden');
+        document.getElementById('error-detail').textContent =
+          (reason ? reason + ' · ' : '') + navigator.userAgent;
+      }
+      window.addEventListener('error', function (e) {
+        var el = e.target;
+        if (el && el !== window && el.tagName !== 'SCRIPT') return;
+        fail(e.message || 'Script failed to load: ' + (el && el.src));
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) { fail(String(e.reason)); });
+      setTimeout(function () { if (!window.crackReady) fail('The game did not finish starting'); }, 10000);
+    })();
+  </script>
+</head>
+<body>
+  <!-- Home -->
+  <section id="home" class="screen">
+    <div class="logo" aria-hidden="true">
+      <span class="tile">4</span><span class="tile">7</span><span class="tile">?</span><span class="tile">?</span>
+      <div class="logo-pegs"><i class="peg exact"></i><i class="peg exact"></i><i class="peg close"></i><i class="peg"></i></div>
+    </div>
+    <h1>Code Crack</h1>
+    <p class="tagline">Guess the secret number code.</p>
+    <button id="player-chip" class="player-chip">Playing as <b id="player-name">…</b> <span aria-hidden="true">▾</span></button>
+    <button id="daily-btn" class="btn big">Daily code</button>
+    <button id="practice-btn" class="btn secondary">Practice</button>
+    <button id="stats-btn" class="btn secondary">📊 Stats</button>
+    <div class="home-row">
+      <button id="help-btn" class="btn ghost">How to play</button>
+      <button id="settings-btn" class="btn ghost">Settings</button>
+    </div>
+  </section>
+
+  <!-- Players -->
+  <section id="players" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Who's playing?</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <ul id="player-list" class="card-list"></ul>
+    <form id="add-player" class="card add-player">
+      <label for="new-name">Add a player</label>
+      <div class="row">
+        <input id="new-name" maxlength="20" autocomplete="off" placeholder="Name">
+        <button class="btn small" type="submit">Add</button>
+      </div>
+      <p id="name-error" class="error-text"></p>
+    </form>
+  </section>
+
+  <!-- Game -->
+  <section id="game" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back to menu"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="game-title">Daily</h2>
+      <button id="giveup-btn" class="icon-btn" aria-label="Give up"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
+    </div>
+    <p class="legend">
+      <span><i class="peg exact"></i> right digit, right spot</span>
+      <span><i class="peg close"></i> right digit, wrong spot</span>
+    </p>
+    <ol id="guesses" class="guesses"></ol>
+    <div class="entry">
+      <div id="slots" class="slots"></div>
+      <p id="entry-msg" class="entry-msg" role="status"></p>
+      <div id="notes" class="notes" aria-label="Notes: tap a digit to mark it out or in"></div>
+      <div id="keypad" class="keypad"></div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section id="stats" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Stats</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <div class="scroll">
+      <div class="filters">
+        <select id="stats-player" aria-label="Player"></select>
+        <div id="stats-length" class="chips" role="group" aria-label="Code length"></div>
+      </div>
+      <div id="stats-body"></div>
+      <h3>All players</h3>
+      <div class="table-wrap"><table id="compare" class="compare"></table></div>
+    </div>
+  </section>
+
+  <!-- How to play -->
+  <section id="help" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>How to play</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <div class="scroll prose">
+      <p>There's a secret code of <b>4 digits</b>, all different (like <b>0472</b>). Crack it in as few guesses as you can.</p>
+      <p>After each guess you get pegs:</p>
+      <p><i class="peg exact"></i> <b>Green</b>: one of your digits is right <b>and in the right spot</b>.</p>
+      <p><i class="peg close"></i> <b>Yellow</b>: one of your digits is in the code, <b>but in a different spot</b>.</p>
+      <p>The pegs don't say <em>which</em> digits they mean. That's the puzzle.</p>
+      <div class="example">
+        <p>Code <b>0472</b>, you guess <b>4502</b>:</p>
+        <p class="example-row"><span class="tiles"><span class="tile">4</span><span class="tile">5</span><span class="tile">0</span><span class="tile">2</span></span> <span class="pegs"><i class="peg exact"></i><i class="peg close"></i><i class="peg close"></i><i class="peg"></i></span></p>
+        <p>The 2 is in the right spot (green). The 4 and 0 are in the code but elsewhere (yellow). The 5 isn't in it.</p>
+      </div>
+      <p><b>Notes:</b> tap a digit in the notes row to mark it ✕ (not in the code), tap again for ✓ (in the code), and again to clear.</p>
+      <p><b>Daily:</b> everyone gets the same 4-digit code each day, one try per player. <b>Practice:</b> as many as you like, 3, 4 or 5 digits.</p>
+      <p><b>Players:</b> add everyone who plays on this phone. Each player gets their own stats: average guesses, favourite opening guesses, streaks and more.</p>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="settings" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Settings</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <div class="card settings-card">
+      <div class="setting">
+        <span>Practice code length</span>
+        <div id="length-chips" class="chips" role="group" aria-label="Practice code length"></div>
+      </div>
+      <label class="setting"><span>Show how many codes are still possible<small>A helper for learning. Off by default.</small></span><input id="set-left" type="checkbox"></label>
+      <label class="setting"><span>Vibrate</span><input id="set-vibrate" type="checkbox"></label>
+    </div>
+    <p class="fine">Everything is saved on this phone only. No ads, no tracking, no accounts.</p>
+  </section>
+
+  <!-- Result -->
+  <div id="result" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
+    <div class="modal-card">
+      <h2 id="result-title">Cracked it!</h2>
+      <p id="result-code" class="tiles big"></p>
+      <p id="result-text"></p>
+      <p id="result-extra" class="fine"></p>
+      <button id="again-btn" class="btn">Play again</button>
+      <button id="share-btn" class="btn secondary">Share</button>
+      <button id="result-stats-btn" class="btn secondary">📊 Stats</button>
+      <button id="result-home-btn" class="btn ghost">Menu</button>
+    </div>
+  </div>
+
+  <!-- Confirm -->
+  <div id="confirm" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-text">
+    <div class="modal-card">
+      <p id="confirm-text"></p>
+      <button id="confirm-yes" class="btn">Yes</button>
+      <button id="confirm-no" class="btn ghost">Cancel</button>
+    </div>
+  </div>
+
+  <div id="update-bar" class="update-bar hidden" role="status">
+    <span>A new version is ready</span>
+    <button id="update-btn" class="btn">Update</button>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <div id="error" class="hidden" role="alert">
+    <div>
+      <p>Sorry, Code Crack couldn't start on this phone.</p>
+      <p>Please update your browser and try again.</p>
+      <p id="error-detail" class="error-detail"></p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
