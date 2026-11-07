@@ -1,12 +1,18 @@
 // Settings.
 
-import { register } from '../app';
+import { register, show } from '../app';
+import { configured, currentUser, email, isGuest } from '../net/supabase';
+import { playerName } from '../account';
 import { $, on } from '../ui/dom';
 import { LENGTHS } from '../lib/game';
 import { save, settings } from '../store';
 import { feel } from '../ui/feel';
 
 function renderSettings() {
+  $('player-name').textContent = playerName();
+  $('player-kind').textContent = !configured ? 'Playing offline'
+    : !currentUser() ? 'Not connected to the game server'
+      : isGuest() ? 'Guest account · tap to sign in with Google' : `Google${email() ? ` · ${email()}` : ''}`;
   const chips = $('length-chips');
   chips.innerHTML = '';
   for (const len of LENGTHS) {
@@ -30,6 +36,7 @@ const toggle = (id: string, key: 'showLeft' | 'sound' | 'vibrate') =>
     if (key === 'vibrate' && settings().vibrate) navigator.vibrate?.(30);
   });
 toggle('set-left', 'showLeft');
+on('settings-account', 'click', () => show('account'));
 toggle('set-sound', 'sound');
 toggle('set-vibrate', 'vibrate');
 

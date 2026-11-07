@@ -49,7 +49,6 @@
     </div>
     <h1>Vault</h1>
     <p class="tagline">Crack the code.</p>
-    <button id="player-chip" class="player-chip"><b id="player-name">…</b> <span id="player-kind" class="kind"></span> <span aria-hidden="true">▾</span></button>
     <p id="streak" class="streak hidden"></p>
     <div id="offline-note" class="offline-note hidden"><p id="offline-text">📴 You're offline. Single player still works, but won't count on the leaderboard.</p><button id="retry-btn" class="link hidden">Try again</button></div>
     <button id="daily-btn" class="btn big">Daily code</button>
@@ -83,7 +82,7 @@
   <!-- Account -->
   <section id="account" class="screen hidden">
     <div class="bar">
-      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="icon-btn back" data-to="settings" aria-label="Back to settings"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
       <h2>Account</h2>
       <div class="bar-spacer"></div>
     </div>
@@ -255,6 +254,11 @@
       <h2>Settings</h2>
       <div class="bar-spacer"></div>
     </div>
+    <button id="settings-account" class="card account-row" aria-label="Account">
+      <span class="account-avatar" aria-hidden="true">👤</span>
+      <span class="account-text"><b id="player-name">…</b><small id="player-kind"></small></span>
+      <span class="account-go" aria-hidden="true">›</span>
+    </button>
     <div class="card settings-card">
       <div class="setting">
         <span>Single player code length</span>

@@ -1,7 +1,7 @@
 // Start-up: account, then the first screen.
 
 import './style.css';
-import { show, offerUpdate } from './app';
+import { show, offerUpdate, type Screen } from './app';
 import { $, on, toast } from './ui/dom';
 import { data, migrate, save } from './store';
 import { configured, finishSwitch, startSession } from './net/supabase';
@@ -20,7 +20,7 @@ bindResult(
   (length) => { setStatsLength(length); show('stats'); },
 );
 
-document.querySelectorAll('.back').forEach((b) => b.addEventListener('click', () => show('home')));
+document.querySelectorAll<HTMLElement>('.back').forEach((b) => b.addEventListener('click', () => show((b.dataset.to || 'home') as Screen)));
 
 function inviteFromUrl(): string | null {
   const params = new URLSearchParams(location.search);

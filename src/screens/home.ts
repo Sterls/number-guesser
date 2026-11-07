@@ -5,14 +5,12 @@ import { $, on } from '../ui/dom';
 import { data } from '../store';
 import { dailyNumber, todayKey } from '../lib/game';
 import { online } from '../net/api';
-import { configured, isGuest, sessionProblem, startSession } from '../net/supabase';
-import { account, allGames, loadMe, loadStreak, playerName, refreshHistory } from '../account';
+import { configured, sessionProblem, startSession } from '../net/supabase';
+import { account, allGames, loadMe, loadStreak, refreshHistory } from '../account';
 import { startDaily, startSingle } from './play';
 import { openRoom } from './room';
 
 function renderHome() {
-  $('player-name').textContent = playerName();
-  $('player-kind').textContent = configured ? (isGuest() ? 'Guest' : 'Google') : '';
   const today = todayKey();
   const n = dailyNumber(today);
   const done = allGames().find((g) => g.mode === 'daily' && g.date === today && g.ranked);
@@ -40,7 +38,6 @@ function renderHome() {
 
 register('home', renderHome);
 
-on('player-chip', 'click', () => show('account'));
 on('help-btn', 'click', () => show('help'));
 on('help-done', 'click', () => show('home'));
 on('settings-btn', 'click', () => show('settings'));
