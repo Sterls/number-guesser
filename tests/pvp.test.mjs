@@ -63,3 +63,14 @@ test('revealed codes are checked against the fingerprint and the feedback given'
   assert.match(await checkReveal(2, { secret, salt }, hash, guesses, honest), /doesn't match/);
   assert.match(await checkReveal(1, { secret, salt }, hash, guesses, [honest[0], f(0, 0)]), /4502 was wrong/);
 });
+
+test('same-code rooms: both phones get the same code from the seed, a new one each round', async () => {
+  const { sharedSecret } = await import('../js/pvp.js');
+  const { guessProblem } = await import('../js/game.js');
+  const a = sharedSecret('seed1', 1, 4);
+  assert.equal(a, sharedSecret('seed1', 1, 4));
+  assert.equal(guessProblem(a, 4), '');
+  assert.equal(sharedSecret('seed1', 1, 5).length, 5);
+  const rounds = new Set([1, 2, 3, 4, 5].map((r) => sharedSecret('seed1', r, 4)));
+  assert.ok(rounds.size >= 4);
+});

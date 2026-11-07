@@ -86,9 +86,17 @@
     </div>
     <div class="scroll lobby">
       <div id="lobby-start">
-        <p class="lobby-intro">You each set a secret code for the other to crack, then race to crack it. Fewest guesses wins.</p>
+        <p class="lobby-intro">Race a friend to crack a code. Fewest guesses wins.</p>
         <div class="card lobby-card">
           <h3>Create a room</h3>
+          <div id="vs-style" class="style-choice" role="radiogroup" aria-label="How to play">
+            <button type="button" class="style-opt" data-style="own" role="radio">
+              <b>🔒 Each sets a code</b><small>You each pick a code for the other to crack.</small>
+            </button>
+            <button type="button" class="style-opt" data-style="same" role="radio">
+              <b>🎯 Same code</b><small>You both crack the same random code.</small>
+            </button>
+          </div>
           <div class="setting"><span>Code length</span><div id="vs-length" class="chips" role="group" aria-label="Code length"></div></div>
           <button id="create-room" class="btn">Create room</button>
         </div>
@@ -105,6 +113,7 @@
         <div class="card lobby-card center">
           <p class="fine">Room code</p>
           <p id="room-code" class="room-code"></p>
+          <p id="room-style" class="room-style"></p>
           <button id="share-room" class="btn">Send invite</button>
           <p id="room-status" class="room-status" role="status"></p>
         </div>

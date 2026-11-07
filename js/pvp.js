@@ -12,7 +12,7 @@
 // against every bit of feedback given, so nobody can change their code or
 // give wrong feedback without it showing.
 
-import { score } from './game.js';
+import { score, makeSecret, rng, hashString } from './game.js';
 
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I/L mix-ups
 
@@ -96,4 +96,12 @@ export async function checkReveal(round, reveal, hash, myGuesses, feedback) {
     }
   }
   return '';
+}
+
+// "Same code" rooms: both players crack one random code. The room owner's
+// phone picks a random seed for each round and sends it; both phones turn it
+// into the same code, so each can score guesses itself. Neither screen shows
+// the code until the game ends.
+export function sharedSecret(seed, round, length) {
+  return makeSecret(length, rng(hashString(`vault-same:${seed}:${round}`)));
 }

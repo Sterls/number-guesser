@@ -3,7 +3,7 @@ import {
   score, guessProblem, remaining, remainingFrom, explain,
 } from './game.js';
 import {
-  newRoomCode, cleanRoomCode, roomFromUrl, newSalt, fingerprint, crackedAt, outcome, checkReveal,
+  newRoomCode, cleanRoomCode, roomFromUrl, newSalt, fingerprint, crackedAt, outcome, checkReveal, sharedSecret,
 } from './pvp.js';
 import { joinRoom, online } from './room-net.js';
 import { computeStats } from './stats.js';
@@ -289,7 +289,7 @@ function entryTarget() {
 
 function entryOpen() {
   if (gameView !== 'pvp') return Boolean(game);
-  return Boolean(vs) && (vs.phase === 'setcode' || (vs.phase === 'play' && !myDone()));
+  return Boolean(vs) && ((vs.phase === 'setcode' && !sameCode()) || (vs.phase === 'play' && !myDone()));
 }
 
 function renderEntry() {
@@ -474,7 +474,9 @@ let roomError = '';
 let heartbeat = null;
 let vsTab = 'mine';        // which guesses the game screen lists: 'mine' or 'theirs'
 let vsLength = DAILY_LENGTH;
+let vsStyle = 'own'; // 'own': each sets a code for the other; 'same': both crack one random code
 let locking = false;
+const sameCode = () => vs?.style === 'same';
 
 const oppName = () => vs?.opp?.name || 'your friend';
 const vsPlayer = () => data.players.find((p) => p.id === vs?.playerId) || player();
@@ -483,7 +485,7 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 'es'}`;
 
 function freshRound(round) {
   return {
-    round, phase: 'setcode', secret: '', salt: '', hash: '', startedAt: 0,
+    round, phase: 'setcode', secret: '', salt: '', hash: '', seed: '', startedAt: 0,
     guesses: [], times: [], feedback: [], answers: [], gaveUp: false, notes: {},
     result: null, verify: '', checked: false, recordAt: null,
   };
@@ -498,7 +500,7 @@ function freshOpp(o, round) {
 
 function startRoom(code, host) {
   vs = data.versus = {
-    code, host, length: host ? vsLength : 0, meId: newId(), playerId: data.currentId,
+    code, host, length: host ? vsLength : 0, style: host ? vsStyle : '', meId: newId(), playerId: data.currentId,
     ...freshRound(1), phase: 'waiting', opp: freshOpp(null, 1),
   };
   persist();
@@ -559,7 +561,8 @@ async function leaveRoom() {
 function sendState() {
   if (!room || !vs) return;
   room.send('state', {
-    round: vs.round, name: vsPlayer()?.name, host: vs.host, length: vs.length,
+    round: vs.round, name: vsPlayer()?.name, host: vs.host, length: vs.length, style: vs.style,
+    seed: vs.host && sameCode() ? vs.seed : '',
     hash: vs.hash, guesses: vs.guesses, times: vs.times, answers: vs.answers, gaveUp: vs.gaveUp,
     reveal: vs.phase === 'done' ? { secret: vs.secret, salt: vs.salt } : null,
   });
@@ -596,6 +599,7 @@ function onMessage(type, d, from) {
   vs.opp.present = true;
   if (!vs.host && d.host) {
     if (!vs.length) vs.length = d.length;
+    if (!vs.style) vs.style = d.style || 'own';
     if (vs.phase === 'waiting' && d.round > vs.round) Object.assign(vs, freshRound(d.round), { phase: 'waiting' });
   }
   if (d.round !== vs.round) {
@@ -608,8 +612,15 @@ function onMessage(type, d, from) {
     round: d.round, hash: d.hash || '', guesses: d.guesses || [], times: d.times || [],
     answers: d.answers || [], gaveUp: Boolean(d.gaveUp), reveal: d.reveal || null,
   });
+  // Same code: the room owner's seed gives this round's code.
+  if (sameCode() && !vs.host && d.host && d.seed && !vs.secret) {
+    vs.seed = d.seed;
+    vs.secret = sharedSecret(d.seed, vs.round, vs.length);
+  }
   let changed = answerTheirGuesses();
-  vs.feedback = vs.guesses.map((_, i) => vs.opp.answers[i] || null);
+  vs.feedback = sameCode()
+    ? vs.guesses.map((g) => (vs.secret ? score(vs.secret, g) : null))
+    : vs.guesses.map((_, i) => vs.opp.answers[i] || null);
   changed = advance() || changed;
   persist();
   if (changed) sendState();
@@ -635,6 +646,19 @@ function advance() {
     vs.phase = 'setcode';
     changed = true;
     if (screen === 'versus') openRoom();
+  }
+  if (sameCode() && vs.phase === 'setcode') {
+    if (vs.host && !vs.secret) {
+      vs.seed = newSalt();
+      vs.secret = sharedSecret(vs.seed, vs.round, vs.length);
+      changed = true;
+    }
+    // Start once both phones are in this round (the owner waits to hear from the friend).
+    if (vs.secret && vs.opp.present && (!vs.host || vs.opp.round === vs.round)) {
+      vs.phase = 'play';
+      vs.startedAt = Date.now();
+      changed = true;
+    }
   }
   if (vs.phase === 'locked' && vs.opp.hash) {
     vs.phase = 'play';
@@ -667,7 +691,7 @@ function recordVersus() {
   const at = Date.now();
   p.games.push({
     mode: 'pvp', length: vs.length, date: today(), at,
-    secret: vs.opp.reveal?.secret || null, guesses: n ? vs.guesses.slice(0, n) : [...vs.guesses],
+    secret: sameCode() ? vs.secret : vs.opp.reveal?.secret || null, guesses: n ? vs.guesses.slice(0, n) : [...vs.guesses],
     won: n != null, ms: n ? vs.times[n - 1] : at - vs.startedAt,
     result: vs.result.result, opponent: oppName(),
   });
@@ -676,7 +700,7 @@ function recordVersus() {
 
 // Once their code is revealed, check it against their fingerprint and feedback.
 async function verifyReveal() {
-  if (vs?.phase !== 'done' || !vs.opp.reveal || vs.checked) return;
+  if (vs?.phase !== 'done' || !vs.opp.reveal || vs.checked || sameCode()) return;
   vs.checked = true;
   const round = vs.round;
   const problem = await checkReveal(round, vs.opp.reveal, vs.opp.hash, vs.guesses, vs.feedback);
@@ -704,7 +728,7 @@ async function versusSubmit() {
     if (vs.guesses.includes(draft)) return void ($('entry-msg').textContent = `You already tried ${draft}.`);
     vs.guesses.push(draft);
     vs.times.push(Date.now() - vs.startedAt);
-    vs.feedback.push(null);
+    vs.feedback.push(sameCode() ? score(vs.secret, draft) : null);
   }
   draft = '';
   answerTheirGuesses();
@@ -729,7 +753,8 @@ function rematch() {
   const round = vs.opp.round > vs.round ? vs.opp.round : vs.round + 1;
   const o = vs.opp;
   Object.assign(vs, freshRound(round), { phase: o.present ? 'setcode' : 'waiting' });
-  vs.opp = freshOpp(o, round);
+  vs.opp = freshOpp(o, o.round); // their real round: a same-code room waits until they're in this one
+  advance();
   persist();
   sendState();
   openRoom();
@@ -758,9 +783,15 @@ function renderVersus() {
     b.onclick = () => { vsLength = len; renderVersus(); };
     chips.appendChild(b);
   }
+  $('vs-style').querySelectorAll('.style-opt').forEach((b) => {
+    b.classList.toggle('on', b.dataset.style === vsStyle);
+    b.setAttribute('aria-checked', String(b.dataset.style === vsStyle));
+    b.onclick = () => { vsStyle = b.dataset.style; renderVersus(); };
+  });
   if (!vs) return;
   if (vs.phase !== 'waiting') return openRoom();
   $('room-code').textContent = vs.code;
+  $('room-style').textContent = vs.style ? `${styleName(vs.style)} · ${vs.length} digits` : '';
   $('share-room').classList.toggle('hidden', !vs.host);
   $('room-status').textContent = roomState === 'connecting' ? 'Connecting…'
     : roomState === 'error' ? `Couldn't connect (${roomError}). Check your internet and try again.`
@@ -780,7 +811,9 @@ on('join-form', 'submit', (e) => {
 on('leave-room', 'click', () => leaveRoom());
 on('share-room', 'click', async () => {
   const url = inviteLink(vs.code);
-  const text = `Play Vault with me! Crack my code before I crack yours. Room ${vs.code}:`;
+  const text = sameCode()
+    ? `Play Vault with me! Let's see who cracks the code first. Room ${vs.code}:`
+    : `Play Vault with me! Crack my code before I crack yours. Room ${vs.code}:`;
   try {
     if (navigator.share) await navigator.share({ text, url });
     else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Invite link copied. Send it to your friend.'); }
@@ -788,6 +821,10 @@ on('share-room', 'click', async () => {
     if (err?.name !== 'AbortError') toast(`Couldn't share. Tell your friend the room code: ${vs.code}`);
   }
 });
+
+function styleName(style) {
+  return style === 'same' ? '🎯 Same code' : '🔒 Each sets a code';
+}
 
 function inviteLink(code) {
   const params = new URLSearchParams(location.search);
@@ -807,6 +844,7 @@ function renderVersusGame(justGuessed = false) {
   const o = vs.opp, name = esc(oppName());
   const playing = vs.phase === 'play' || vs.phase === 'done';
   $('game-title').textContent = `vs ${oppName()}`;
+  const hideTheirs = sameCode() && vs.phase !== 'done'; // their guesses would give the code away
   $('vs-bar').classList.remove('hidden');
   $('giveup-btn').classList.toggle('hidden', !(vs.phase === 'play' && !myDone()));
   $('entry').classList.toggle('hidden', !entryOpen());
@@ -816,6 +854,7 @@ function renderVersusGame(justGuessed = false) {
   const offline = !o.present ? ` <span class="warn">${name} is offline</span>` : '';
   let status = '';
   if (vs.phase === 'waiting') status = `Waiting for ${name}…`;
+  else if (vs.phase === 'setcode' && sameCode()) status = `🎯 Same code. Waiting for <b>${name}</b>…`;
   else if (vs.phase === 'setcode') status = `Set a secret code for <b>${name}</b> to crack.`;
   else if (vs.phase === 'locked') status = `Waiting for <b>${name}</b> to set their code…`;
   else {
@@ -845,19 +884,25 @@ function renderVersusGame(justGuessed = false) {
   const list = $('guesses');
   const codeCard = (label, code) => `<li class="code-card"><span>${label}</span><span class="tiles">${tilesHtml(code)}</span></li>`;
   let rows = [];
-  if (vs.phase === 'setcode') {
+  if (vs.phase === 'setcode' && sameCode()) {
+    list.innerHTML = `<li class="empty">You'll both crack the same random code. You start as soon as ${name} is ready.</li>`;
+  } else if (vs.phase === 'setcode') {
     list.innerHTML = `<li class="empty">Pick ${vs.length} different digits and tap <b>Lock in</b>.<br>Your code stays on this phone until the game ends.</li>`;
   } else if (vs.phase === 'locked') {
     list.innerHTML = codeCard('Your code 🔒', vs.secret)
       + `<li class="empty">When ${name} has set theirs, you both start guessing. Fewest guesses wins; if it's a tie, the faster player wins.</li>`;
   } else if (vsTab === 'theirs') {
-    rows = o.guesses.map((g, i) => rowHtml(i, String(g), vs.answers[i], false));
-    list.innerHTML = codeCard('Your code', vs.secret)
-      + (rows.length ? rows.join('') : `<li class="empty">${name} hasn't guessed yet.</li>`);
+    if (hideTheirs) {
+      list.innerHTML = `<li class="empty">${name} has made ${plural(o.guesses.length, 'guess')}.<br>You'll see them when the game ends, so nobody can copy.</li>`;
+    } else {
+      rows = o.guesses.map((g, i) => rowHtml(i, String(g), vs.answers[i], false));
+      list.innerHTML = codeCard(sameCode() ? 'The code' : 'Your code', vs.secret)
+        + (rows.length ? rows.join('') : `<li class="empty">${name} hasn't guessed yet.</li>`);
+    }
   } else {
     rows = vs.guesses.map((g, i) => rowHtml(i, g, vs.feedback[i], justGuessed && i === vs.guesses.length - 1));
     list.innerHTML = rows.length ? rows.join('')
-      : `<li class="empty">Go! Guess ${name}'s ${vs.length}-digit code.<br>Each guess gets feedback: <b class="t-exact">right spot</b> and <b class="t-close">wrong spot</b>.</li>`;
+      : `<li class="empty">Go! ${sameCode() ? `Crack the ${vs.length}-digit code before ${name} does.` : `Guess ${name}'s ${vs.length}-digit code.`}<br>Each guess gets feedback: <b class="t-exact">right spot</b> and <b class="t-close">wrong spot</b>.</li>`;
     list.querySelectorAll('.guess-row').forEach((row) => { row.onclick = () => showExplanation(Number(row.dataset.i)); });
     if (vs.guesses.length) showExplanation(vs.guesses.length - 1);
   }
@@ -873,9 +918,9 @@ function showVersusResult() {
   const o = vs.opp, name = oppName();
   const mine = crackedAt(vs.feedback, vs.length), theirs = crackedAt(vs.answers, vs.length);
   $('result-title').textContent = { win: 'You win! 🏆', lose: `${name} wins`, draw: "It's a draw" }[vs.result.result];
-  $('result-label').textContent = `${name}'s code`;
+  $('result-label').textContent = sameCode() ? 'The code' : `${name}'s code`;
   $('result-label').classList.remove('hidden');
-  $('result-code').innerHTML = tilesHtml(o.reveal?.secret || '?'.repeat(vs.length));
+  $('result-code').innerHTML = tilesHtml((sameCode() ? vs.secret : o.reveal?.secret) || '?'.repeat(vs.length));
   const side = (n, gaveUp) => (n ? plural(n, 'guess') : gaveUp ? 'gave up' : 'not cracked');
   $('result-text').textContent = `You: ${side(mine, vs.gaveUp)} · ${name}: ${side(theirs, o.gaveUp)}`;
   $('result-extra').textContent = [

@@ -395,3 +395,13 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); text-transform: u
   background: var(--ink); color: #fff; border-radius: 16px; padding: 8px 12px; font-weight: 700; font-size: 15px;
 }
 .code-card .tile { background: rgba(255, 255, 255, 0.14); color: #fff; box-shadow: none; }
+
+.style-choice { display: flex; flex-direction: column; gap: 8px; }
+.style-opt {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 12px 14px;
+  border: 0; border-radius: 16px; background: #f6f5fd; box-shadow: inset 0 0 0 2px transparent;
+}
+.style-opt b { font-size: 17px; }
+.style-opt small { font-size: 14px; color: var(--ink-soft); }
+.style-opt.on { background: #efedff; box-shadow: inset 0 0 0 3px var(--accent); }
+.room-style { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }

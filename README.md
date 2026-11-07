@@ -25,24 +25,38 @@ as "this dot is about this digit", which is not how the feedback works.
 
 ## Playing a friend
 
-1. Tap **⚔️ Play a friend → Create room** (pick 3, 4 or 5 digits).
+1. Tap **⚔️ Play a friend**, choose how to play, pick 3, 4 or 5 digits and
+   tap **Create room**. The room owner decides:
+   - **🔒 Each sets a code:** you each set a secret code for the other to crack.
+   - **🎯 Same code:** you both crack the same random code.
 2. Tap **Send invite** and send the link to your friend (or tell them the
    5-letter room code to type under **Join a friend's room**).
-3. When they join, you each set a secret code for the other and tap **Lock in**.
-4. Then you both guess at the same time. **Fewest guesses wins**; if it's
+3. When they join: in *Each sets a code* rooms you each pick a code and tap
+   **Lock in**; in *Same code* rooms you start straight away.
+4. You both guess at the same time. **Fewest guesses wins**; if it's
    the same number, whoever made their winning guess faster wins. Giving
-   up loses. Tap **Rematch** to play again in the same room.
+   up loses. Tap **Rematch** to play again in the same room (same code
+   rooms get a new code each round).
 
 You can switch between **Your guesses** and **their guesses** at your code
 while you play. Closing the app doesn't drop you: open it again and it
 rejoins the room.
 
-**Fair play:** your code never leaves your phone during the game. Your phone
+In *Same code* rooms you can't see your friend's guesses until the game
+ends (they'd give the code away); you only see how many they've made.
+
+**Fair play (each sets a code):** your code never leaves your phone during the game. Your phone
 scores your friend's guesses and sends back only the two numbers. When you
 lock in, your phone sends a fingerprint (SHA-256 hash) of your code; at the
 end both codes are revealed and checked against the fingerprint and every
 bit of feedback, so changing your code or giving wrong feedback shows up
 as a warning.
+
+**Same code rooms** work differently: the room owner's phone sends a random
+seed and both phones turn it into the same code, so each can check its own
+guesses. Neither screen shows the code until the game ends, but someone
+determined could dig it out with the browser's developer tools. Fine
+between friends; use *Each sets a code* if that matters.
 
 Rooms use [Supabase](https://supabase.com) Realtime: the same free project as
 Whoosh Blocks (`js/config.js`), only its live connection, no database tables,
@@ -79,7 +93,7 @@ formula re-counts every past game.
 
 - `js/game.js`: the rules (scoring, daily code, possible codes). No screen code.
 - `js/stats.js`: player stats from the list of finished games.
-- `js/pvp.js`: rules for playing a friend (who wins, fingerprint checks).
+- `js/pvp.js`: rules for playing a friend (who wins, fingerprint checks, same-code seeds).
 - `js/room-net.js`: the live room connection (Supabase Realtime, or a
   BroadcastChannel with `?localroom`).
 - `vendor/supabase.js`: a local copy of the Supabase library (MIT).
