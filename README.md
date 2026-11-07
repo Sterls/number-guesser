@@ -4,10 +4,10 @@ A number code-breaking game with **no ads, no tracking and no accounts**.
 It's the classic "bulls and cows" game, with friendlier names.
 
 The vault has a secret code of 4 different digits (like `0472`). After each guess
-you get two clues, shown as numbers in labelled columns next to the guess:
+you get feedback: two numbers in labelled columns next to the guess:
 
-- 🟢 **Right spot:** how many of your digits are in the code and in the right place
-- 🟡 **Wrong spot:** how many are in the code but in a different place
+- 🟢 **Right spot:** number of correct digits in the correct position
+- 🟡 **Wrong spot:** number of correct digits in the wrong position
 
 They're totals for the whole guess and never say *which* digits they mean;
 working that out is the puzzle. A line under the guesses also spells the
