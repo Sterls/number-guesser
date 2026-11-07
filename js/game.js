@@ -54,7 +54,7 @@ export function dailyNumber(dateKey) {
 }
 
 export function dailySecret(dateKey, length = DAILY_LENGTH) {
-  return makeSecret(length, rng(hashString(`safecracker:${dateKey}:${length}`)));
+  return makeSecret(length, rng(hashString(`vault:${dateKey}:${length}`)));
 }
 
 export function score(secret, guess) {

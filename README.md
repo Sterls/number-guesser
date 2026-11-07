@@ -1,9 +1,9 @@
-# Safecracker
+# Vault
 
 A number code-breaking game with **no ads, no tracking and no accounts**.
 It's the classic "bulls and cows" game, with friendlier names.
 
-The safe has a secret code of 4 different digits (like `0472`). After each guess
+The vault has a secret code of 4 different digits (like `0472`). After each guess
 you get pegs:
 
 - 🟢 **Green:** right digit, **right spot**

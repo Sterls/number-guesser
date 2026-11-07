@@ -8,8 +8,8 @@
 // VERSION is a fingerprint of the files below. Run `npm run stamp` after
 // changing any of them (`npm test` fails if you forget), so phones notice.
 
-const VERSION = '89511a648f25';
-const CACHE = `safecracker-${VERSION}`;
+const VERSION = '9c9765383144';
+const CACHE = `vault-${VERSION}`;
 const ASSETS = [
   './',
   'index.html',

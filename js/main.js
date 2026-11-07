@@ -331,7 +331,7 @@ function formatTime(ms) {
 }
 
 function shareText(r) {
-  const head = r.mode === 'daily' ? `Safecracker #${dailyNumber(r.date)}` : `Safecracker practice (${r.length} digits)`;
+  const head = r.mode === 'daily' ? `Vault #${dailyNumber(r.date)}` : `Vault practice (${r.length} digits)`;
   const result = r.won ? `${r.guesses.length} guess${r.guesses.length === 1 ? '' : 'es'}` : 'gave up';
   const rows = r.guesses.map((g) => {
     const { exact, close } = score(r.secret, g);

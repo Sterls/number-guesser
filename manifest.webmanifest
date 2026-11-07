@@ -1,6 +1,6 @@
 {
-  "name": "Safecracker",
-  "short_name": "Safecracker",
+  "name": "Vault",
+  "short_name": "Vault",
   "description": "Guess the secret number code. Green: right digit, right spot. Yellow: right digit, wrong spot.",
   "id": "./",
   "start_url": "./",
