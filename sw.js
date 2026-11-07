@@ -8,7 +8,7 @@
 // VERSION is a fingerprint of the files below. Run `npm run stamp` after
 // changing any of them (`npm test` fails if you forget), so phones notice.
 
-const VERSION = 'f754cbd885c3';
+const VERSION = 'dd39a06ef068';
 const CACHE = `vault-${VERSION}`;
 const ASSETS = [
   './',

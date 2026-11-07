@@ -429,3 +429,5 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); text-transform: u
   .keypad { gap: 6px; }
   .key { height: 46px; }
 }
+
+.btn.danger-text { color: var(--danger); }

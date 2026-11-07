@@ -262,6 +262,7 @@ function tilesHtml(code) {
 function renderGame(justGuessed = false) {
   $('vs-status').classList.add('hidden');
   $('vs-panel').classList.add('hidden');
+  $('room-menu-btn').classList.add('hidden');
   $('guess-head-label').textContent = 'Your guess';
   $('giveup-btn').classList.remove('hidden');
   $('entry').classList.remove('hidden');
@@ -817,7 +818,23 @@ on('join-form', 'submit', (e) => {
   joinRoomCode(code);
 });
 on('leave-room', 'click', () => leaveRoom());
-on('share-room', 'click', async () => {
+// The gear while playing a friend: room details, give up, invite, leave.
+on('room-menu-btn', 'click', () => {
+  if (!vs) return;
+  $('room-menu-title').textContent = `Room ${vs.code}`;
+  $('room-menu-info').textContent = `vs ${oppName()} · ${styleName(vs.style)} · ${vs.length} digits`;
+  $('menu-giveup').classList.toggle('hidden', !(vs.phase === 'play' && !myDone()));
+  $('room-menu').classList.remove('hidden');
+});
+const closeRoomMenu = () => $('room-menu').classList.add('hidden');
+on('menu-close', 'click', closeRoomMenu);
+on('room-menu', 'click', (e) => { if (e.target === $('room-menu')) closeRoomMenu(); });
+on('menu-giveup', 'click', () => { closeRoomMenu(); versusGiveUp(); });
+on('menu-invite', 'click', () => { closeRoomMenu(); shareInvite(); });
+on('menu-leave', 'click', () => { closeRoomMenu(); leaveRoom(); });
+
+on('share-room', 'click', () => shareInvite());
+async function shareInvite() {
   const url = inviteLink(vs.code);
   const text = sameCode()
     ? `Play Vault with me! Let's see who cracks the code first. Room ${vs.code}:`
@@ -828,7 +845,7 @@ on('share-room', 'click', async () => {
   } catch (err) {
     if (err?.name !== 'AbortError') toast(`Couldn't share. Tell your friend the room code: ${vs.code}`);
   }
-});
+}
 
 function styleName(style) {
   return style === 'same' ? '🎯 Same code' : '🔒 Each sets a code';
@@ -853,7 +870,8 @@ function renderVersusGame(justGuessed = false) {
   const playing = vs.phase === 'play' || vs.phase === 'done';
   $('game-title').textContent = `vs ${oppName()}`;
   const hideTheirs = sameCode() && vs.phase !== 'done'; // their guesses would give the code away
-  $('giveup-btn').classList.toggle('hidden', !(vs.phase === 'play' && !myDone()));
+  $('giveup-btn').classList.add('hidden'); // giving up is in the room menu (gear)
+  $('room-menu-btn').classList.remove('hidden');
   $('entry').classList.toggle('hidden', !entryOpen());
 
   // One short status line under the title; anything longer goes in the panel at the bottom.
