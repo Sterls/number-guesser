@@ -218,7 +218,7 @@
       <div class="step">
         <div>
           <p class="step-title"><span class="step-num">1</span>Crack the secret code</p>
-          <p class="tiles"><span class="tile lock">?</span><span class="tile lock">?</span><span class="tile lock">?</span><span class="tile lock">?</span></p>
+          <p class="tiles"><span class="tile hidden-digit">?</span><span class="tile hidden-digit">?</span><span class="tile hidden-digit">?</span><span class="tile hidden-digit">?</span></p>
           <p class="fine">4 digits. No digit is used twice.</p>
         </div>
       </div>
@@ -226,20 +226,20 @@
       <div class="step">
         <div>
           <p class="step-title"><span class="step-num">2</span>Every guess gets feedback</p>
-          <div class="guess-head grid"><span></span><span>Guess</span><span class="t-exact">Right<br>spot</span><span class="t-close">Wrong<br>spot</span></div>
+          <div class="guess-head grid"><span></span><span>Guess</span><span>Right<br>spot</span><span>Wrong<br>spot</span></div>
           <div class="guess-row grid"><span class="num"></span><span class="tiles"><span class="tile">4</span><span class="tile">5</span><span class="tile">0</span><span class="tile">2</span></span><span class="count exact">1</span><span class="count close">2</span></div>
-          <ul class="why-list">
-            <li><span class="count exact mini">1</span><span><b>Right spot</b>: number of correct digits in the correct position</span></li>
-            <li><span class="count close mini">2</span><span><b>Wrong spot</b>: number of correct digits in the wrong position</span></li>
-          </ul>
-          <p class="why">Here the code is <b>0472</b>: the 2 is in the right spot; the 4 and 0 are in the wrong spot.</p>
+          <dl class="why-list">
+            <dt>Right spot</dt><dd>how many digits are correct <b>and</b> in the correct position</dd>
+            <dt>Wrong spot</dt><dd>how many digits are correct but in the wrong position</dd>
+          </dl>
+          <p class="why">If the code is <b>0472</b>: the 2 is in the right spot, so <b>Right spot</b> is 1. The 4 and the 0 are in the code but elsewhere, so <b>Wrong spot</b> is 2.</p>
         </div>
       </div>
 
       <div class="step">
         <div>
           <p class="step-title"><span class="step-num">3</span>Use the feedback to crack it</p>
-          <p class="fine">The feedback doesn't say <em>which</em> digits it means. Get <span class="count exact mini">4</span> in the right spot to win.</p>
+          <p class="fine">The feedback doesn't say <em>which</em> digits it means. Get all 4 in the right spot to win.</p>
         </div>
       </div>
 
