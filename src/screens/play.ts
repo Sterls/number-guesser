@@ -33,8 +33,8 @@ function serverController(start: ServerGame): Controller {
   const notes = (data.notes[g.id] ||= {});
   const rows = (): Row[] => g.guesses.map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
   return {
-    title: () => (g.mode === 'daily' ? `Daily #${dailyNumber(g.day || todayKey())}` : `Single player · ${g.length} digits`),
-    sub: () => (g.mode === 'daily' ? 'Same code for everyone' : ''),
+    title: () => (g.mode === 'daily' ? `Daily #${dailyNumber(g.day || todayKey())}` : 'Single player'),
+    sub: () => (g.mode === 'daily' ? 'Same code for everyone' : `${g.length} digits`),
     length: () => g.length,
     notes: () => notes,
     saveNotes: save,
@@ -146,8 +146,8 @@ function startOffline() {
 function offlineController(g: OfflineGame): Controller {
   const rows = (): Row[] => g.guesses.map((guess) => ({ guess, feedback: score(g.secret, guess) }));
   return {
-    title: () => `Single player · ${g.length} digits`,
-    sub: () => '📴 Offline · not ranked',
+    title: () => 'Single player',
+    sub: () => `${g.length} digits · 📴 Offline, not ranked`,
     length: () => g.length,
     notes: () => g.notes,
     saveNotes: save,
