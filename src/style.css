@@ -415,14 +415,16 @@ h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); text-transform: u
 .tutorial { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; }
 .step { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 16px 14px; }
 .step p { margin: 0; }
-.step > div { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.step-num { flex-shrink: 0; font-size: 15px; font-weight: 800; color: var(--ink-faint); }
+.step > div { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-left: 34px; }
+.step-num { flex-shrink: 0; width: 24px; font-size: 15px; font-weight: 800; color: var(--ink-faint); }
 .step-num::after { content: '.'; }
-.step-title { font-size: 19px; font-weight: 800; line-height: 1.25; display: flex; align-items: center; gap: 10px; }
+.step-title { font-size: 19px; font-weight: 800; line-height: 1.25; display: flex; align-items: baseline; gap: 10px; }
+.step .step-title { margin-left: -34px; }
 .step .fine { font-size: 15px; }
 .step .guess-head { padding: 0 8px; color: var(--ink-soft); }
 .step .guess-row { cursor: default; padding: 6px 8px; }
-.step .grid { grid-template-columns: 0 1fr 48px 48px; column-gap: 6px; }
+.step .grid { grid-template-columns: 1fr 48px 48px; column-gap: 6px; }
+.step .grid > .num, .step .guess-head > span:first-child { display: none; } /* no guess numbers in the example */
 .step .tiles .tile { width: 36px; height: 42px; font-size: 22px; }
 .why { font-size: 15px; color: var(--ink-soft); }
 .why-list { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 15px; line-height: 1.35; }
@@ -431,9 +433,14 @@ h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); text-transform: u
 .tile.hidden-digit { color: var(--ink-faint); }
 #help-done { align-self: center; margin-top: 6px; }
 @media (max-width: 360px) {
-  .step .tiles .tile { width: 32px; height: 38px; font-size: 20px; }
-  .step .grid { grid-template-columns: 0 1fr 44px 44px; }
-  .step .count:not(.mini) { width: 36px; height: 36px; font-size: 19px; }
+  .step > div { padding-left: 26px; }
+  .step .step-title { margin-left: -26px; }
+  .step-num { width: 16px; }
+  .step .tiles { gap: 4px; }
+  .step .tiles .tile { width: 28px; height: 34px; font-size: 18px; border-radius: 8px; }
+  .step .grid { grid-template-columns: 1fr 38px 38px; column-gap: 4px; }
+  .step .guess-row, .step .guess-head { padding-left: 4px; padding-right: 4px; }
+  .step .count { width: 32px; height: 32px; font-size: 17px; }
 }
 
 /* ---------- settings ---------- */
