@@ -175,12 +175,24 @@ Never use other games' names as keywords.
 | Health | None |
 | Sensitive permissions | None (the app asks for no Android permissions) |
 
+### Account creation and deletion
+
+These come up in the Data safety section and under **App content → Data deletion**.
+
+| Question | Answer |
+|---|---|
+| Methods of account creation | **OAuth** only (Sign in with Google). The automatic guest account isn't created by the player and has no username or login, so it isn't listed. |
+| Delete account URL | `https://sterls.github.io/number-guesser/delete-account.html` |
+| Can users delete their account in the app? | Yes: Settings → Account → **Delete my account** (deletes the account, its Google link, games, stats and leaderboard entries) |
+| Can users request deletion of some data without deleting the account? | Yes: they can hide themselves from the leaderboard, and ask by email for anything else |
+
 ### Data safety
 
 **Does your app collect or share any of the required user data types?** Yes.
 **Is all of the user data collected by your app encrypted in transit?** Yes.
 **Do you provide a way for users to request that their data is deleted?** Yes
-(Settings → Account → Delete my games and stats, or by email).
+(Settings → Account → Delete my account, or the page at
+`https://sterls.github.io/number-guesser/delete-account.html`).
 
 Nothing is **shared** with third parties (Supabase and Google process data on
 our behalf, which Play doesn't count as sharing).

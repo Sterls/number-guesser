@@ -6,8 +6,8 @@ import { $, on, ask, toast, busy, esc } from '../ui/dom';
 import { data, save } from '../store';
 import { nameProblem } from '../lib/names';
 import { api, online } from '../net/api';
-import { configured, email, isGuest, signInWithGoogle, signOut } from '../net/supabase';
-import { account, loadMe, loadStreak, playerName, refreshHistory } from '../account';
+import { configured, email, isGuest, signInWithGoogle, signOut, startFresh } from '../net/supabase';
+import { account, loadMe, playerName } from '../account';
 
 // After the name is chosen: where to go next (an invite link, help, or the menu).
 let afterName: () => void = () => show('home');
@@ -131,23 +131,31 @@ on('acct-rename', 'click', async () => {
 });
 
 on('acct-delete', 'click', async () => {
-  if (!await ask('Delete all your games and stats, on this phone and on the server? This can\'t be undone.', { yes: 'Delete' })) return;
+  if (!online()) return toast('Deleting your account needs internet.');
+  const google = !isGuest();
+  if (!await ask(`Delete your account${google ? ' (and its link to your Google account)' : ''}, with all your games, stats and leaderboard results? This can't be undone.`, { yes: 'Delete account' })) return;
+  const done = busy($('acct-delete'), 'Deleting…');
   try {
-    if (online()) await api.deleteMe();
-    else return toast('Deleting your data needs internet.');
-    data.history = [];
-    data.local = [];
-    data.offline = null;
-    save();
-    account.me = null;
-    account.streak = 0;
-    await loadMe();
-    await Promise.all([refreshHistory(), loadStreak()]);
-    toast('Your data has been deleted.');
-    renderAccount();
+    await api.deleteMe();
   } catch (e) {
-    toast((e as Error).message);
+    done();
+    return toast((e as Error).message);
   }
+  // Everything kept on this phone goes too, and it starts again as a new guest.
+  data.history = [];
+  data.historyFor = '';
+  data.local = [];
+  data.offline = null;
+  data.room = null;
+  data.notes = {};
+  data.name = '';
+  save();
+  account.me = null;
+  account.streak = 0;
+  await startFresh().catch(() => {});
+  done();
+  toast('Your account has been deleted.');
+  askName(() => show('home'));
 });
 
 register('account', () => {

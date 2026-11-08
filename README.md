@@ -127,7 +127,8 @@ with `VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_KEY=test`.
   unranked history.
 - `supabase/setup.sql`: tables and functions; `scripts/test-sql.mjs` tests it.
 - `src/sw-template.js`: offline support; the build fills in the file list.
-- `public/privacy.html`: privacy policy.
+- `public/privacy.html`: privacy policy. `public/delete-account.html`: how to
+  delete your account (linked from the Play listing).
 
 ## Installing on a phone
 

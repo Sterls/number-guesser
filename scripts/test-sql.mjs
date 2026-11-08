@@ -267,10 +267,11 @@ test('reports: three hide a name', () => {
   assert.ok(!j(psql('select vault_daily_board(current_date)', { role: 'anon' })).top.some((r) => r.name === 'Alex'));
 });
 
-test('deleting my data', () => {
+test('deleting my account removes the account itself and everything with it', () => {
   b('select vault_delete_me()');
   assert.equal(Number(psql(`select count(*) from vault_games where user_id = '${B}'`)), 0);
-  assert.equal(j(b('select vault_me()')).name, null);
+  assert.equal(Number(psql(`select count(*) from vault_profiles where user_id = '${B}'`)), 0);
+  assert.equal(Number(psql(`select count(*) from auth.users where id = '${B}'`)), 0);
 });
 
 let failed = 0;

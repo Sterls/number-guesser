@@ -96,6 +96,16 @@ export async function signInWithGoogle(mergeToken: () => Promise<string>): Promi
   if (error) throw error;
 }
 
+// After the account was deleted on the server: forget it on this phone
+// (there's nothing left to sign out of) and start a new guest.
+export async function startFresh(): Promise<void> {
+  if (!supabase) return;
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+  user = null;
+  const { data } = await supabase.auth.signInAnonymously();
+  user = data.user;
+}
+
 // Sign out of Google; this phone becomes a new guest.
 export async function signOut(): Promise<void> {
   if (!supabase) return;

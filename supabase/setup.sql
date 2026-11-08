@@ -304,7 +304,8 @@ as $$
   where g.user_id = vault_me_id() and g.finished_at is not null;
 $$;
 
--- Delete everything about me: games, profile, rooms I host.
+-- Delete my account and everything about me: games, profile, rooms I host,
+-- and the account itself (with its Google email, if signed in with Google).
 create or replace function public.vault_delete_me()
 returns void
 language plpgsql
@@ -319,6 +320,8 @@ begin
   delete from vault_rooms r where r.host = me;
   delete from vault_profiles where user_id = me;
   delete from vault_merge_tokens where user_id = me;
+  delete from vault_reports where reporter = me;
+  delete from auth.users where id = me;  -- the account itself (Supabase removes its Google link with it)
 end;
 $$;
 
