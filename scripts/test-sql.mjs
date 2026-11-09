@@ -257,6 +257,25 @@ test('the host leaving closes the room for everyone', () => {
   assert.equal(psql(`select cracked::text || ':' || (finished_at is not null)::text from vault_games where id = '${gb.id}'`), 'false:true');
 });
 
+test('players away for 10 minutes are taken out; an absent host closes the room', () => {
+  const r = j(a('select vault_room_create(4)'));
+  b(`select vault_room_join('${r.code}')`);
+  c(`select vault_room_join('${r.code}')`);
+  a(`select vault_room_start('${r.id}')`);
+  const away = (u) => psql(`update vault_room_players set last_seen = now() - interval '11 minutes' where room_id = '${r.id}' and user_id = '${u}'`);
+  away(C);
+  let ra = j(a(`select vault_room_state('${r.id}')`));
+  assert.equal(players(ra).C.in_room, false, 'C was away too long');
+  assert.equal(players(ra).C.gave_up, true);
+  assert.equal(j(b(`select vault_room_state('${r.id}')`)).players.filter((p) => p.in_room).length, 2);
+  away(A); // the host closed the app
+  assert.deepEqual(j(b(`select vault_room_state('${r.id}')`)), { closed: true });
+  // A stale room can't be joined either.
+  const r2 = j(a('select vault_room_create(4)'));
+  psql(`update vault_room_players set last_seen = now() - interval '11 minutes' where room_id = '${r2.id}'`);
+  fails(() => c(`select vault_room_join('${r2.code}')`), /room not found/);
+});
+
 test('rooms hold up to 8 players', () => {
   const ids = Array.from({ length: 8 }, (_, i) => `00000000-0000-0000-0001-${String(i).padStart(12, '0')}`);
   psql(`insert into auth.users (id) values ${ids.map((id) => `('${id}')`).join(', ')}`);

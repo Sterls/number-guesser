@@ -33,7 +33,10 @@ working that out is the puzzle.
   counts show), so nobody can copy. The round ends when everyone has
   finished, or when the host ends it; then the host starts the next one.
   Players who join mid-round play from the next round. If the host leaves,
-  the room closes for everyone (the round so far still counts). The host can remove a player (✕ next to
+  the room closes for everyone (the round so far still counts). Anyone
+  whose app hasn't checked in for 10 minutes (closed the app, lost signal)
+  is taken out as if they'd left, so a host who just closes the app closes
+  the room too. The host can remove a player (✕ next to
   their name, or ⚙️ → Remove a player), say someone who closed the app
   without leaving; their round counts as given up, and they can rejoin with
   the code.

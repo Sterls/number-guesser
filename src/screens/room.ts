@@ -50,9 +50,12 @@ function enter(state: RoomState) {
   openRoom();
 }
 
-function startPolling() {
+// Every 3 seconds while the room is on screen; once a minute elsewhere in the
+// app, so the server knows you're still around (players away for 10 minutes
+// are taken out of the room, and an absent host closes it).
+function startPolling(every = 3000) {
   clearInterval(poll);
-  poll = window.setInterval(() => { if (!document.hidden) void fetchRoom(); }, 3000);
+  poll = window.setInterval(() => { if (!document.hidden) void fetchRoom(); }, every);
 }
 
 export function openRoom() {
@@ -94,12 +97,13 @@ async function fetchRoom() {
   try {
     const state = await api.roomState(data.room.id);
     if (!state || state === 'closed') {
+      const wasHost = room?.host;
       forget();
       if ($('result').dataset.kind === 'room') $('result').classList.add('hidden');
-      if (screen() === 'game' || screen() === 'versus') {
-        toast(state === 'closed' ? 'The host left, so the room has closed.' : 'You\'re no longer in that room.');
-        show('home');
-      }
+      toast(state === 'closed'
+        ? (wasHost ? 'Your room closed while you were away.' : 'The host left, so the room has closed.')
+        : 'You\'re no longer in that room.');
+      if (screen() === 'game' || screen() === 'versus') show('home');
       return;
     }
     update(state);
@@ -163,8 +167,8 @@ async function leaveRoom(): Promise<boolean> {
 }
 
 onLeave((from, to) => {
-  // Stop asking the server while the room isn't on screen (it starts again when it is).
-  if ((from === 'game' || from === 'versus') && to !== 'game' && to !== 'versus') clearInterval(poll);
+  // Ask the server less often while the room isn't on screen (it speeds up again when it is).
+  if ((from === 'game' || from === 'versus') && to !== 'game' && to !== 'versus' && data.room) startPolling(60_000);
 });
 
 // ---------- players list ----------

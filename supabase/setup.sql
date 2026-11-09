@@ -65,8 +65,10 @@ create table if not exists public.vault_room_players (
   room_id uuid not null references public.vault_rooms (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
   joined_at timestamptz not null default now(),
+  last_seen timestamptz not null default now(), -- the app checks in while you're in the room
   primary key (room_id, user_id)
 );
+alter table public.vault_room_players add column if not exists last_seen timestamptz not null default now();
 
 create table if not exists public.vault_games (
   id uuid primary key default gen_random_uuid(),
@@ -653,6 +655,10 @@ declare
   r vault_rooms%rowtype;
   mine vault_games%rowtype;
 begin
+  -- I'm here; anyone who hasn't been for a while is taken out.
+  update vault_room_players set last_seen = now()
+    where room_id = p_room and user_id = me and last_seen < now() - interval '20 seconds';
+  perform vault_room_sweep(p_room);
   select * into r from vault_rooms where id = p_room;
   if not found then
     return json_build_object('closed', true); -- the host left
@@ -717,6 +723,7 @@ begin
     raise exception 'too many rooms today' using errcode = '22023';
   end if;
   delete from vault_rooms where updated_at < now() - interval '7 days';
+  perform vault_room_sweep();
   loop
     v_code := (select string_agg(substr('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 1 + floor(random() * 31)::int, 1), '')
                from generate_series(1, 5));
@@ -739,6 +746,7 @@ declare
   r vault_rooms%rowtype;
 begin
   perform vault_me();
+  perform vault_room_sweep();
   select * into r from vault_rooms where code = upper(trim(p_code)) for update;
   if not found then
     raise exception 'room not found' using errcode = '22023';
@@ -883,6 +891,29 @@ begin
 end;
 $$;
 
+-- Players whose app hasn't checked in for 10 minutes (closed the app, lost
+-- signal) are taken out of the room, as if they'd left; an absent host
+-- closes the room. Runs whenever someone looks at, joins or creates a room.
+create or replace function public.vault_room_sweep(p_room uuid default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rid uuid;
+  uid uuid;
+begin
+  for rid, uid in
+    select p.room_id, p.user_id from vault_room_players p join vault_rooms r on r.id = p.room_id
+    where p.last_seen < now() - interval '10 minutes' and (p_room is null or p.room_id = p_room)
+    order by (p.user_id = r.host) desc
+  loop
+    perform vault_room_remove(rid, uid);
+  end loop;
+end;
+$$;
+
 -- ---------- leaderboards ----------
 
 -- Ranked games: finished, or left unfinished for 24 hours (not cracked).
@@ -1015,7 +1046,7 @@ begin
     'vault_name_ok(text)', 'vault_make_code(integer)', 'vault_valid_guess(text, integer)',
     'vault_score(text, text)', 'vault_me_id()', 'vault_name_of(uuid)',
     'vault_game_json(public.vault_games, boolean)', 'vault_room_names_except(uuid, uuid)',
-    'vault_room_settle(uuid)', 'vault_room_remove(uuid, uuid)', 'vault_room_pid(uuid, uuid)',
+    'vault_room_settle(uuid)', 'vault_room_remove(uuid, uuid)', 'vault_room_pid(uuid, uuid)', 'vault_room_sweep(uuid)',
     'vault_streak(uuid, date)'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;
