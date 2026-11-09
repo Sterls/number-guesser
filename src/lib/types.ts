@@ -38,6 +38,7 @@ export interface StoryMap {
 }
 
 export interface RoomPlayer {
+  pid: string;            // id within the room (for the host to remove someone)
   name: string;
   me: boolean;
   host: boolean;

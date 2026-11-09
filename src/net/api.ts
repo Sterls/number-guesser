@@ -54,6 +54,7 @@ export const api = {
   roomStart: (id: string) => rpc<RoomState>('vault_room_start', { p_room: id }),
   roomEnd: (id: string) => rpc<RoomState>('vault_room_end', { p_room: id }),
   roomLeave: (id: string) => rpc<void>('vault_room_leave', { p_room: id }),
+  roomKick: (id: string, pid: string) => rpc<RoomState>('vault_room_kick', { p_room: id, p_player: pid }),
 
   dailyBoard: (day: string) => rpc<Board<DailyRow> & { day: string; players: number }>('vault_daily_board', { p_day: day }),
   board: (length: number, order: 'avg' | 'best') => rpc<Board<BoardRow>>('vault_board', { p_length: length, p_order: order }),

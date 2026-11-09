@@ -249,6 +249,32 @@ test('rooms hold up to 8 players', () => {
   as(ids[1])(`select vault_room_join('${r.code}')`); // already in: fine
 });
 
+test('the host can remove a player who went quiet; the round then finishes', () => {
+  const r = j(a('select vault_room_create(4)'));
+  b(`select vault_room_join('${r.code}')`);
+  c(`select vault_room_join('${r.code}')`);
+  const s = j(a(`select vault_room_start('${r.id}')`));
+  const others = (st, who) => st.players.filter((p) => !p.me && p.in_room).map((p) => p.pid);
+  assert.equal(others(s).length, 2);
+  assert.ok(s.players.every((p) => /^[0-9a-f]{12}$/.test(p.pid)), 'players have a short room id, not their account id');
+  const cPid = j(c(`select vault_room_state('${r.id}')`)).players.find((p) => p.me).pid;
+  fails(() => b(`select vault_room_kick('${r.id}', '${cPid}')`), /only the host/);
+  for (const who of [a, b]) {
+    const g = j(who(`select vault_room_state('${r.id}')`)).mine;
+    who(`select vault_guess('${g.id}', '${secretOf(g.id)}')`);
+  }
+  assert.equal(j(a(`select vault_room_state('${r.id}')`)).playing, true, 'still waiting for C');
+  const after = j(a(`select vault_room_kick('${r.id}', '${cPid}')`));
+  assert.equal(after.playing, false, 'removing the last one still playing ends the round');
+  assert.equal(after.players.filter((p) => p.in_room).length, 2);
+  assert.equal(j(c(`select vault_room_state('${r.id}')`)), null, 'C is out of the room');
+  const aPid = after.players.find((p) => p.me).pid;
+  a(`select vault_room_kick('${r.id}', '${aPid}')`); // the host can't remove themselves
+  assert.equal(j(a(`select vault_room_state('${r.id}')`)).host, true);
+  c(`select vault_room_join('${r.code}')`); // can come back with the code
+  a(`select vault_room_leave('${r.id}')`); b(`select vault_room_leave('${r.id}')`); c(`select vault_room_leave('${r.id}')`);
+});
+
 test('story: 1 level of 1 digit, 2 of 2, 3 of 3, then 4; cracking the current level opens the next', () => {
   let m = j(c('select vault_story_map()'));
   assert.equal(m.level, 1);

@@ -584,6 +584,15 @@ $$;
 -- everyone has finished, or when the host ends it. Players who join during
 -- a round play from the next one.
 
+-- A player's id within one room, safe to show to the others.
+create or replace function public.vault_room_pid(p_room uuid, p_user uuid)
+returns text
+language sql
+immutable
+as $$
+  select left(md5(p_room::text || ':' || p_user::text), 12);
+$$;
+
 create or replace function public.vault_room_names_except(p_room uuid, p_user uuid)
 returns text
 language sql
@@ -661,6 +670,7 @@ begin
       select json_agg(x.p order by x.sort1, x.sort2, x.sort3, x.joined)
       from (
         select json_build_object(
+                 'pid', vault_room_pid(r.id, u.user_id),
                  'name', vault_name_of(u.user_id), 'me', u.user_id = me, 'host', u.user_id = r.host,
                  'in_room', u.in_room, 'in_round', g.id is not null,
                  'count', coalesce(array_length(g.guesses, 1), 0),
@@ -797,14 +807,15 @@ $$;
 
 -- Leaving mid-round counts as giving up. If the host leaves, the player who
 -- joined next becomes the host; the last one out closes the room.
-create or replace function public.vault_room_leave(p_room uuid)
+-- Take a player out of a room: their round counts as given up, the host
+-- passes on if they were host, and an empty room is closed.
+create or replace function public.vault_room_remove(p_room uuid, p_user uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  me uuid := vault_me_id();
   r vault_rooms%rowtype;
   next_host uuid;
 begin
@@ -813,15 +824,51 @@ begin
     return;
   end if;
   update vault_games set gave_up = true, finished_at = now()
-    where room_id = r.id and round = r.round and user_id = me and finished_at is null;
-  delete from vault_room_players where room_id = r.id and user_id = me;
+    where room_id = r.id and round = r.round and user_id = p_user and finished_at is null;
+  delete from vault_room_players where room_id = r.id and user_id = p_user;
   select user_id into next_host from vault_room_players where room_id = r.id order by joined_at limit 1;
   if next_host is null then
     delete from vault_rooms where id = r.id;
     return;
   end if;
-  update vault_rooms set host = case when host = me then next_host else host end, updated_at = now() where id = r.id;
+  update vault_rooms set host = case when host = p_user then next_host else host end, updated_at = now() where id = r.id;
   perform vault_room_settle(r.id);
+end;
+$$;
+
+create or replace function public.vault_room_leave(p_room uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform vault_room_remove(p_room, vault_me_id());
+end;
+$$;
+
+-- The host removes another player (someone who left without leaving).
+-- Players are named by `pid`, a per-room id from vault_room_state, so
+-- account ids are never shown to other players.
+create or replace function public.vault_room_kick(p_room uuid, p_player text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := vault_me_id();
+  target uuid;
+begin
+  if not exists (select 1 from vault_rooms where id = p_room and host = me) then
+    raise exception 'only the host can remove players' using errcode = '42501';
+  end if;
+  select user_id into target from vault_room_players
+    where room_id = p_room and vault_room_pid(p_room, user_id) = p_player;
+  if target is not null and target <> me then
+    perform vault_room_remove(p_room, target);
+  end if;
+  return vault_room_state(p_room);
 end;
 $$;
 
@@ -957,7 +1004,8 @@ begin
     'vault_name_ok(text)', 'vault_make_code(integer)', 'vault_valid_guess(text, integer)',
     'vault_score(text, text)', 'vault_me_id()', 'vault_name_of(uuid)',
     'vault_game_json(public.vault_games, boolean)', 'vault_room_names_except(uuid, uuid)',
-    'vault_room_settle(uuid)', 'vault_streak(uuid, date)'] loop
+    'vault_room_settle(uuid)', 'vault_room_remove(uuid, uuid)', 'vault_room_pid(uuid, uuid)',
+    'vault_streak(uuid, date)'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;
   -- Signed-in players (guests included).
@@ -967,6 +1015,7 @@ begin
     'vault_start(text, integer, date)', 'vault_game(uuid)', 'vault_guess(uuid, text)', 'vault_give_up(uuid)',
     'vault_room_state(uuid)', 'vault_room_create(integer)', 'vault_room_join(text)',
     'vault_room_start(uuid)', 'vault_room_end(uuid)', 'vault_room_leave(uuid)',
+    'vault_room_kick(uuid, text)',
     'vault_my_streak(date)', 'vault_report(text)', 'vault_story_start(integer)', 'vault_story_map()'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);

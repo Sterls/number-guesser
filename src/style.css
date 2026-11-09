@@ -343,6 +343,12 @@ input:focus { border-color: var(--brass); }
 .room-players .status { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); text-align: right; }
 .room-players .status.ok { color: var(--exact-ink); }
 .room-players .status.out { color: var(--ink-faint); }
+.room-players li:has(.kick) { grid-template-columns: 30px 1fr auto auto; }
+.room-players .kick {
+  width: 32px; height: 32px; margin: -4px -6px -4px 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink-faint); font: inherit; font-size: 16px; cursor: pointer;
+}
+.room-players .kick:hover, .room-players .kick:focus-visible { color: var(--danger); background: #1b2332; }
 .guesses .room-players { margin-top: 2px; }
 .round-code { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .round-code .tiles .tile { width: 32px; height: 38px; font-size: 20px; }

@@ -176,9 +176,31 @@ function playersHtml(list: RoomPlayer[], over: boolean): string {
     return `<li class="${p.me ? 'me' : ''}${!p.in_room ? ' gone' : ''}${over && p.place === 1 && p.cracked ? ' first' : ''}">
       <span class="place">${mark}</span>
       <span class="who-name">${esc(p.name)}${p.me ? '<small>you</small>' : ''}${p.host && over && p.place ? '<small>host</small>' : ''}</span>
-      <span class="status ${s.cls}">${s.text}</span></li>`;
+      <span class="status ${s.cls}">${s.text}</span>${canKick(p) ? `<button class="kick" data-pid="${esc(p.pid)}" data-name="${esc(p.name)}" aria-label="Remove ${esc(p.name)}">✕</button>` : ''}</li>`;
   }).join('');
 }
+
+// The host can remove anyone else still in the room (say, someone who
+// closed the app without leaving and is holding up the round).
+const canKick = (p: RoomPlayer) => Boolean(room?.host && !p.me && p.in_room);
+
+document.addEventListener('click', async (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('.kick');
+  if (!btn || !room) return;
+  const name = btn.dataset.name || 'this player';
+  const during = room.playing ? ' Their round counts as given up.' : '';
+  if (!await ask(`Remove ${name} from the room?${during} They can join again with the room code.`, { yes: 'Remove' })) return;
+  const done = busy(btn, '…');
+  try {
+    const state = await api.roomKick(room.id, btn.dataset.pid!);
+    live?.poke();
+    update(state);
+    toast(`${name} was removed.`);
+  } catch (e) {
+    toast((e as Error).message);
+    done();
+  }
+});
 
 // ---------- lobby ----------
 
@@ -472,6 +494,7 @@ function openRoomMenu() {
   $('room-menu-info').textContent = `${plural(room.players.filter((p) => p.in_room).length, 'player')} · ${room.length} digits · host: ${room.host ? 'you' : room.host_name}`;
   $('menu-giveup').classList.toggle('hidden', !(inRound() && !myDone()));
   $('menu-end').classList.toggle('hidden', !(room.host && room.playing));
+  $('menu-remove').classList.toggle('hidden', !(room.host && room.players.some(canKick)));
   $('menu-lobby').classList.toggle('hidden', room.playing);
   $('room-menu').classList.remove('hidden');
 }
@@ -482,6 +505,13 @@ on('menu-invite', 'click', () => { closeMenu(); void shareInvite(); });
 on('menu-leave', 'click', () => { closeMenu(); void leaveRoom(); });
 on('menu-lobby', 'click', () => { closeMenu(); show('versus'); });
 on('menu-end', 'click', () => { closeMenu(); void endRound(); });
+// Show the players with their ✕ buttons: the in-game Players tab, or the lobby.
+on('menu-remove', 'click', () => {
+  closeMenu();
+  if (screen() === 'game' && room?.playing && room.mine) { tab = 'players'; renderGame(); }
+  else show('versus');
+  toast('Tap ✕ next to the player to remove.');
+});
 on('menu-giveup', 'click', async () => {
   closeMenu();
   const g = myGame();
