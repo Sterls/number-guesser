@@ -4,7 +4,7 @@
 import { register } from '../app';
 import { $, esc, formatTime } from '../ui/dom';
 import { tilesHtml } from '../ui/board';
-import { LENGTHS, dailyNumber, todayKey } from '../lib/game';
+import { dailyNumber, todayKey } from '../lib/game';
 import { computeStats } from '../lib/stats';
 import { allGames, account, refreshHistory } from '../account';
 import { DAILY_LENGTH } from '../lib/game';
@@ -16,17 +16,21 @@ const fmt = (x: number | null, digits = 1) => (x == null ? '–' : x.toFixed(dig
 const pct = (x: number | null) => (x == null ? '–' : `${Math.round(x * 100)}%`);
 
 function renderStats() {
+  const games = allGames();
+  // Only offer code lengths this player has actually played.
+  const played = [...new Set(games.map((g) => g.length))].sort((a, b) => a - b);
+  if (statsLength != null && !played.includes(statsLength)) statsLength = null;
   const chips = $('stats-length');
   chips.innerHTML = '';
-  for (const len of [null, ...LENGTHS]) {
+  chips.classList.toggle('hidden', played.length < 2);
+  for (const len of [null, ...played]) {
     const b = document.createElement('button');
     b.className = `chip${len === statsLength ? ' on' : ''}`;
-    b.textContent = len == null ? 'All' : `${len} digits`;
+    b.textContent = len == null ? 'All' : `${len} digit${len === 1 ? '' : 's'}`;
     b.onclick = () => { statsLength = len; renderStats(); };
     chips.appendChild(b);
   }
 
-  const games = allGames();
   const s = computeStats(games, { length: statsLength, today: todayKey() });
   const streak = account.streak || s.streak.current;
   const body = $('stats-body');
