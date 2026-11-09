@@ -654,7 +654,10 @@ declare
   mine vault_games%rowtype;
 begin
   select * into r from vault_rooms where id = p_room;
-  if not found or not exists (select 1 from vault_room_players where room_id = r.id and user_id = me) then
+  if not found then
+    return json_build_object('closed', true); -- the host left
+  end if;
+  if not exists (select 1 from vault_room_players where room_id = r.id and user_id = me) then
     return null;
   end if;
   select * into mine from vault_games where room_id = r.id and round = r.round and user_id = me;
@@ -807,8 +810,9 @@ $$;
 
 -- Leaving mid-round counts as giving up. If the host leaves, the player who
 -- joined next becomes the host; the last one out closes the room.
--- Take a player out of a room: their round counts as given up, the host
--- passes on if they were host, and an empty room is closed.
+-- Take a player out of a room: their round counts as given up. If the host
+-- leaves, the room closes for everyone (the round so far is ranked as if
+-- the host had ended it); an empty room closes too.
 create or replace function public.vault_room_remove(p_room uuid, p_user uuid)
 returns void
 language plpgsql
@@ -825,6 +829,13 @@ begin
   end if;
   update vault_games set gave_up = true, finished_at = now()
     where room_id = r.id and round = r.round and user_id = p_user and finished_at is null;
+  if p_user = r.host then
+    update vault_games set finished_at = now()
+      where room_id = r.id and round = r.round and finished_at is null;
+    perform vault_room_settle(r.id);
+    delete from vault_rooms where id = r.id;
+    return;
+  end if;
   delete from vault_room_players where room_id = r.id and user_id = p_user;
   select user_id into next_host from vault_room_players where room_id = r.id order by joined_at limit 1;
   if next_host is null then

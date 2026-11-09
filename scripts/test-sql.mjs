@@ -217,27 +217,44 @@ test('joining mid-round waits for the next; the host can end a round', () => {
   assert.equal(j(c(`select vault_room_state('${r.id}')`)).mine.round, 2);
 });
 
-test('leaving: counts as giving up, the host role moves on, the last one out closes the room', () => {
+test('leaving: counts as giving up; the last one out closes the room', () => {
   const r = j(a('select vault_room_create(4)'));
   b(`select vault_room_join('${r.code}')`);
   c(`select vault_room_join('${r.code}')`);
   a(`select vault_room_start('${r.id}')`);
-  a(`select vault_room_leave('${r.id}')`);
-  assert.equal(j(a(`select vault_room_state('${r.id}')`)), null);
-  let rb = j(b(`select vault_room_state('${r.id}')`));
-  assert.equal(rb.host, true, 'the next player to have joined is the host');
-  const sam = players(rb).Sam;
-  assert.equal(sam.in_room, false);
-  assert.equal(sam.gave_up, true);
-  b(`select vault_give_up('${rb.mine.id}')`);
+  b(`select vault_room_leave('${r.id}')`);
+  assert.equal(j(b(`select vault_room_state('${r.id}')`)), null);
+  let ra = j(a(`select vault_room_state('${r.id}')`));
+  assert.equal(ra.host, true);
+  const alex = players(ra).Alex;
+  assert.equal(alex.in_room, false);
+  assert.equal(alex.gave_up, true);
+  a(`select vault_give_up('${ra.mine.id}')`);
   const rc = j(c(`select vault_room_state('${r.id}')`));
   c(`select vault_guess('${rc.mine.id}', '${secretOf(rc.mine.id)}')`);
-  rb = j(b(`select vault_room_state('${r.id}')`));
-  assert.equal(rb.playing, false);
-  assert.equal(players(rb).C.place, 1);
-  b(`select vault_room_leave('${r.id}')`);
+  ra = j(a(`select vault_room_state('${r.id}')`));
+  assert.equal(ra.playing, false);
+  assert.equal(players(ra).C.place, 1);
   c(`select vault_room_leave('${r.id}')`);
+  a(`select vault_room_leave('${r.id}')`);
   assert.equal(psql(`select count(*) from vault_rooms where id = '${r.id}'`), '0');
+});
+
+test('the host leaving closes the room for everyone', () => {
+  const r = j(a('select vault_room_create(4)'));
+  b(`select vault_room_join('${r.code}')`);
+  c(`select vault_room_join('${r.code}')`);
+  a(`select vault_room_start('${r.id}')`);
+  const gc = j(c(`select vault_room_state('${r.id}')`)).mine;
+  c(`select vault_guess('${gc.id}', '${secretOf(gc.id)}')`);
+  const gb = j(b(`select vault_room_state('${r.id}')`)).mine;
+  a(`select vault_room_leave('${r.id}')`);
+  assert.equal(psql(`select count(*) from vault_rooms where id = '${r.id}'`), '0');
+  assert.deepEqual(j(b(`select vault_room_state('${r.id}')`)), { closed: true });
+  fails(() => b(`select vault_room_join('${r.code}')`), /room not found/);
+  // The round so far still counts: C cracked it and won, B didn't finish.
+  assert.equal(psql(`select result from vault_games where id = '${gc.id}'`), 'win');
+  assert.equal(psql(`select cracked::text || ':' || (finished_at is not null)::text from vault_games where id = '${gb.id}'`), 'false:true');
 });
 
 test('rooms hold up to 8 players', () => {

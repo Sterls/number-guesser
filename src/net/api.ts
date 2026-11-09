@@ -50,7 +50,9 @@ export const api = {
 
   roomCreate: (length: number) => rpc<RoomState>('vault_room_create', { p_length: length }),
   roomJoin: (code: string) => rpc<RoomState>('vault_room_join', { p_code: code }),
-  roomState: (id: string) => rpc<RoomState | null>('vault_room_state', { p_room: id }),
+  // null: I'm not in the room. 'closed': the host left, so the room is gone.
+  roomState: (id: string) => rpc<RoomState | { closed: true } | null>('vault_room_state', { p_room: id })
+    .then((s) => (s && 'closed' in s ? 'closed' as const : s)),
   roomStart: (id: string) => rpc<RoomState>('vault_room_start', { p_room: id }),
   roomEnd: (id: string) => rpc<RoomState>('vault_room_end', { p_room: id }),
   roomLeave: (id: string) => rpc<void>('vault_room_leave', { p_room: id }),

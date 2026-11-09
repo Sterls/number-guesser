@@ -73,7 +73,7 @@ export async function resumeRoom() {
   if (!data.room || !online()) return;
   try {
     const state = await api.roomState(data.room.id);
-    if (!state) { forget(); return; }
+    if (!state || state === 'closed') { forget(); return; }
     enter(state);
   } catch {
     // Try again next time.
@@ -93,9 +93,13 @@ async function fetchRoom() {
   if (!data.room || !online()) return;
   try {
     const state = await api.roomState(data.room.id);
-    if (!state) {
+    if (!state || state === 'closed') {
       forget();
-      if (screen() === 'game' || screen() === 'versus') { toast('You\'re no longer in that room.'); show('home'); }
+      if ($('result').dataset.kind === 'room') $('result').classList.add('hidden');
+      if (screen() === 'game' || screen() === 'versus') {
+        toast(state === 'closed' ? 'The host left, so the room has closed.' : 'You\'re no longer in that room.');
+        show('home');
+      }
       return;
     }
     update(state);
@@ -143,7 +147,10 @@ function redraw() {
 async function leaveRoom(): Promise<boolean> {
   if (!data.room) return true;
   const playing = inRound() && !myDone();
-  if (!await ask(playing ? 'Leave the room? That counts as giving up this round.' : 'Leave the room?', { yes: 'Leave' })) return false;
+  const question = room?.host
+    ? `Leave and close the room for everyone?${playing ? ' This round ends now.' : ''}`
+    : playing ? 'Leave the room? That counts as giving up this round.' : 'Leave the room?';
+  if (!await ask(question, { yes: room?.host ? 'Close room' : 'Leave' })) return false;
   try {
     await api.roomLeave(data.room.id);
   } catch (e) {
@@ -231,6 +238,7 @@ function renderLobby() {
     return;
   }
   const inRoom = room.players.filter((p) => p.in_room);
+  $('leave-room').textContent = room.host ? 'Close room' : 'Leave room';
   $('room-style').textContent = `🎯 Everyone cracks the same ${room.length}-digit code`;
   $('room-players-title').textContent = `Players (${inRoom.length}/8)`;
 
@@ -363,8 +371,9 @@ function roomController(): Controller {
         const last = g.guesses[g.guesses.length - 1];
         if (!g.cracked) feel.guess(last.exact, last.close);
         const state = await api.roomState(room.id);
-        if (g.cracked) void celebrate(g.guesses.length === 1 ? 'First try!' : 'Cracked!', crackedLine(state, g.guesses.length));
-        if (state) update(state);
+        if (g.cracked) void celebrate(g.guesses.length === 1 ? 'First try!' : 'Cracked!', crackedLine(state === 'closed' ? null : state, g.guesses.length));
+        if (state && state !== 'closed') update(state);
+        else void fetchRoom();
         renderGame(true);
         live?.poke();
       } catch (e) {
@@ -463,7 +472,7 @@ function showRoomResult() {
   $<HTMLButtonElement>('again-btn').disabled = room.players.filter((p) => p.in_room).length < 2;
   $('share-btn').classList.add('hidden');
   $('result-stats-btn').textContent = room.host ? 'Room lobby' : `Room lobby (waiting for ${room.host_name})`;
-  $('result-home-btn').textContent = 'Leave room';
+  $('result-home-btn').textContent = room.host ? 'Close room' : 'Leave room';
   $('result').dataset.kind = 'room';
   $('result').classList.remove('hidden');
 }
@@ -499,6 +508,7 @@ function openRoomMenu() {
   $('room-menu-info').textContent = `${plural(room.players.filter((p) => p.in_room).length, 'player')} · ${room.length} digits · host: ${room.host ? 'you' : room.host_name}`;
   $('menu-giveup').classList.toggle('hidden', !(inRound() && !myDone()));
   $('menu-end').classList.toggle('hidden', !(room.host && room.playing));
+  $('menu-leave').textContent = room.host ? 'Close room' : 'Leave room';
   $('menu-remove').classList.toggle('hidden', !(room.host && room.players.some(canKick)));
   $('menu-lobby').classList.toggle('hidden', room.playing);
   $('room-menu').classList.remove('hidden');
