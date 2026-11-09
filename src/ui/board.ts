@@ -30,6 +30,8 @@ export interface Controller {
   action: 'flag' | 'gear' | null;
   onAction(): void;
   onHead?(head: HTMLElement): void;
+  tabs?(): string;                     // html for a full-width switch above the guesses
+  onTabs?(tabs: HTMLElement): void;
 }
 
 let ctl: Controller | null = null;
@@ -87,6 +89,10 @@ export function renderGame(justGuessed = false) {
   list.querySelectorAll<HTMLElement>('.guess-row[data-i]:not(.theirs)').forEach((row) => {
     row.onclick = () => showExplanation(Number(row.dataset.i));
   });
+  const tabs = ctl.tabs?.() ?? '';
+  $('game-tabs').innerHTML = tabs;
+  $('game-tabs').classList.toggle('hidden', !tabs);
+  if (tabs) ctl.onTabs?.($('game-tabs'));
   const head = ctl.head();
   $('guess-head').classList.toggle('hidden', head === null && !rows?.length);
   $('guess-head').classList.toggle('no-cols', !rows?.length); // no guess rows: no column headings

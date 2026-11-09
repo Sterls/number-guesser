@@ -122,6 +122,7 @@ function update(state: RoomState) {
   const key = `${state.id}:${state.round}`;
   if (!state.playing && state.mine && shownResultFor !== key) {
     shownResultFor = key;
+    tab = 'players'; // behind the result: the standings
     addFinished(state.mine);
     const won = state.mine.place === 1 && state.mine.cracked;
     void afterCelebration().then(() => {
@@ -169,14 +170,14 @@ function playerStatus(p: RoomPlayer, over: boolean): { text: string; cls: string
   return { text: `${p.count} …`, cls: '' };
 }
 
-function playersHtml(list: RoomPlayer[], over: boolean): string {
+function playersHtml(list: RoomPlayer[], over: boolean, kick = true): string {
   return list.map((p) => {
     const s = playerStatus(p, over);
     const mark = over && p.place && p.in_round ? (p.place === 1 && p.cracked ? '🏆' : String(p.place)) : p.host ? '👑' : '';
     return `<li class="${p.me ? 'me' : ''}${!p.in_room ? ' gone' : ''}${over && p.place === 1 && p.cracked ? ' first' : ''}">
       <span class="place">${mark}</span>
       <span class="who-name">${esc(p.name)}${p.me ? '<small>you</small>' : ''}${p.host && over && p.place ? '<small>host</small>' : ''}</span>
-      <span class="status ${s.cls}">${s.text}</span>${canKick(p) ? `<button class="kick" data-pid="${esc(p.pid)}" data-name="${esc(p.name)}" aria-label="Remove ${esc(p.name)}">✕</button>` : ''}</li>`;
+      <span class="status ${s.cls}">${s.text}</span>${kick && canKick(p) ? `<button class="kick" data-pid="${esc(p.pid)}" data-name="${esc(p.name)}" aria-label="Remove ${esc(p.name)}">✕</button>` : ''}</li>`;
   }).join('');
 }
 
@@ -373,7 +374,9 @@ function roomController(): Controller {
     list(list, justGuessed) {
       if (!room) { list.innerHTML = ''; return null; }
       if (tab === 'players') {
-        list.innerHTML = `<li class="players-li"><ul class="room-players">${playersHtml(roundPlayers(), false)}</ul></li><li class="round-note">Everyone's guesses are shown when the round ends.</li>`;
+        const over = !room.playing;
+        list.innerHTML = `<li class="players-li"><ul class="room-players">${playersHtml(roundPlayers(), over)}</ul></li>`
+          + (over ? '' : `<li class="round-note">Everyone's guesses are shown when the round ends.</li>`);
         return null;
       }
       const rows: Row[] = (room.mine?.guesses ?? []).map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
@@ -381,12 +384,14 @@ function roomController(): Controller {
         : `<li class="empty">Go! Everyone's cracking the same ${room.length}-digit code.<br>Each guess gets feedback: <b class="t-exact">right spot</b> and <b class="t-close">wrong spot</b>.</li>`;
       return rows;
     },
-    head() {
-      if (!room) return null;
-      return `<span class="who-switch" role="tablist"><button class="who${tab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">You</button><button class="who${tab === 'players' ? ' on' : ''}" data-tab="players" role="tab">Players <small>${roundPlayers().length}</small></button></span>`;
+    head: () => null,
+    tabs() {
+      if (!room) return '';
+      const others = room.playing ? `Players <small>${roundPlayers().length}</small>` : '🏆 Standings';
+      return `<span class="who-switch big" role="tablist"><button class="who${tab === 'mine' ? ' on' : ''}" data-tab="mine" role="tab">Your guesses</button><button class="who${tab === 'players' ? ' on' : ''}" data-tab="players" role="tab">${others}</button></span>`;
     },
-    onHead(head) {
-      head.querySelectorAll<HTMLElement>('.who').forEach((b) => { b.onclick = () => { tab = b.dataset.tab as 'mine' | 'players'; renderGame(); }; });
+    onTabs(el) {
+      el.querySelectorAll<HTMLElement>('.who').forEach((b) => { b.onclick = () => { tab = b.dataset.tab as 'mine' | 'players'; renderGame(); }; });
     },
     panel() {
       if (!room || !inRound() || !myDone()) return '';
@@ -450,9 +455,9 @@ function showRoomResult() {
   $('result-text').textContent = g.cracked
     ? `${plural(g.guesses.length, 'guess')} · ${ordinal(place)} of ${players.length}`
     : `${g.gave_up ? 'You gave up' : 'Not cracked'} · ${players.length} players`;
-  const podium = players.filter((p) => p.cracked).slice(0, 3)
-    .map((p) => `${p.place}. ${p.me ? 'You' : p.name} (${p.count})`).join(' · ');
-  $('result-extra').textContent = podium || 'Nobody cracked it this round.';
+  // Everyone's standing, right in the result.
+  $('result-extra').innerHTML = `<span class="standings-title">Standings</span><ul class="room-players standings">${playersHtml(players, true, false)}</ul>`
+    + (players.some((p) => p.cracked) ? '' : '<span>Nobody cracked it this round.</span>');
   $('again-btn').textContent = 'Next round';
   $('again-btn').classList.toggle('hidden', !room.host);
   $<HTMLButtonElement>('again-btn').disabled = room.players.filter((p) => p.in_room).length < 2;
