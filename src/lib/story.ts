@@ -1,8 +1,8 @@
-// Story mode: levels on a map. Level 1 is a 1-digit code, level 2 two
-// digits, level 3 three, then 4 digits from level 4 on, with no end.
+// Story mode: levels on a map. Level 1 is a 1-digit code, levels 2-3 two
+// digits, levels 4-6 three, then 4 digits from level 7 on, with no end.
 // Every 10 levels is a new chapter: a new place to crack.
 
-export const storyLength = (level: number) => Math.min(Math.max(level, 1), 4);
+export const storyLength = (level: number) => (level <= 1 ? 1 : level <= 3 ? 2 : level <= 6 ? 3 : 4);
 
 // Guesses for 3 stars ("par"). 2 stars for up to 3 more; 1 star otherwise.
 const PAR: Record<number, number> = { 1: 3, 2: 5, 3: 6, 4: 7 };

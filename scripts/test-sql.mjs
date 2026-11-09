@@ -249,12 +249,12 @@ test('rooms hold up to 8 players', () => {
   as(ids[1])(`select vault_room_join('${r.code}')`); // already in: fine
 });
 
-test('story: 1, 2, 3 then 4 digits; cracking the current level opens the next', () => {
+test('story: 1 level of 1 digit, 2 of 2, 3 of 3, then 4; cracking the current level opens the next', () => {
   let m = j(c('select vault_story_map()'));
   assert.equal(m.level, 1);
   fails(() => c('select vault_story_start(2)'), /level locked/);
   const lengths = [];
-  for (let level = 1; level <= 5; level++) {
+  for (let level = 1; level <= 7; level++) {
     const g = j(c('select vault_story_start()'));
     assert.equal(g.round, level);
     lengths.push(g.length);
@@ -267,18 +267,18 @@ test('story: 1, 2, 3 then 4 digits; cracking the current level opens the next', 
     const done = j(c(`select vault_guess('${g.id}', '${secret}')`));
     assert.equal(done.cracked, true);
   }
-  assert.deepEqual(lengths, [1, 2, 3, 4, 4]);
+  assert.deepEqual(lengths, [1, 2, 2, 3, 3, 3, 4]);
   m = j(c('select vault_story_map()'));
-  assert.equal(m.level, 6);
-  assert.deepEqual(m.best.map((b) => [b.level, b.guesses]), [[1, 1], [2, 1], [3, 2], [4, 1], [5, 1]]);
+  assert.equal(m.level, 8);
+  assert.deepEqual(m.best.map((b) => [b.level, b.guesses]), [[1, 1], [2, 1], [3, 2], [4, 1], [5, 1], [6, 1], [7, 1]]);
   // Replaying an earlier level doesn't move progress; giving up doesn't either.
   const replay = j(c('select vault_story_start(3)'));
-  assert.equal(replay.length, 3);
+  assert.equal(replay.length, 2);
   c(`select vault_guess('${replay.id}', '${secretOf(replay.id)}')`);
-  const g6 = j(c('select vault_story_start()'));
-  c(`select vault_give_up('${g6.id}')`);
-  assert.equal(j(c('select vault_story_map()')).level, 6);
-  assert.equal(j(c('select vault_me()')).story_level, 6);
+  const g8 = j(c('select vault_story_start()'));
+  c(`select vault_give_up('${g8.id}')`);
+  assert.equal(j(c('select vault_story_map()')).level, 8);
+  assert.equal(j(c('select vault_me()')).story_level, 8);
 });
 
 test('merging a guest into the account signed in on the same phone', () => {

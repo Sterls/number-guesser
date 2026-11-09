@@ -512,10 +512,20 @@ end;
 $$;
 
 -- ---------- story ----------
--- Levels on a map: level 1 is a 1-digit code, level 2 two digits, level 3
--- three, then 4 digits from level 4 on, with no end. Cracking the level
+-- Levels on a map: level 1 is a 1-digit code, levels 2-3 two digits,
+-- levels 4-6 three, then 4 digits from level 7 on, with no end. Cracking the level
 -- you're on opens the next. Earlier levels can be replayed (for more stars),
 -- which doesn't change your progress. The level number is kept in `round`.
+
+-- How many digits a story level's code has.
+create or replace function public.vault_story_length(lvl int)
+returns int
+language sql
+immutable
+as $$
+  select case when lvl <= 1 then 1 when lvl <= 3 then 2 when lvl <= 6 then 3 else 4 end;
+$$;
+revoke execute on function public.vault_story_length(int) from public, anon, authenticated;
 
 -- Start (or carry on with) a story level: the next one by default.
 create or replace function public.vault_story_start(p_level int default null)
@@ -541,7 +551,7 @@ begin
     order by started_at desc limit 1;
   if not found then
     insert into vault_games (user_id, mode, length, secret, round)
-      values (me, 'story', least(lvl, 4), vault_make_code(least(lvl, 4)), lvl)
+      values (me, 'story', vault_story_length(lvl), vault_make_code(vault_story_length(lvl)), lvl)
       returning * into g;
   end if;
   return vault_game_json(g);

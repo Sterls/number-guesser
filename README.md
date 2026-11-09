@@ -17,8 +17,8 @@ working that out is the puzzle.
 - **Daily code:** the same 4-digit code for everyone each day, one try. This
   is the main ranked mode: everyone had the same code, so it's the fairest
   comparison. Crack it every day for a 🔥 streak.
-- **🗺️ Story:** levels on a map. Level 1 is a 1-digit code, level 2 two
-  digits, level 3 three, then 4 digits from level 4 on, with no end. Each
+- **🗺️ Story:** levels on a map. Level 1 is a 1-digit code, levels 2–3 two
+  digits, levels 4–6 three, then 4 digits from level 7 on, with no end. Each
   level earns 1–3 ⭐ (3 for cracking it within par: 3, 5, 6 and 7 guesses for
   1–4 digits); replay earlier levels for more. Every 10 levels is a new
   chapter (🐷 Piggy Bank, 🎒 School Locker, … 🏛️ Federal Reserve). Progress is

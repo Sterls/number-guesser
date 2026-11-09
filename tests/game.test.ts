@@ -72,7 +72,7 @@ test('the result line explains the counts in words', () => {
 
 test('story: code lengths, stars and chapters', async () => {
   const { storyLength, stars, chapterOf } = await import('../src/lib/story');
-  expect([1, 2, 3, 4, 5, 50].map(storyLength)).toEqual([1, 2, 3, 4, 4, 4]);
+  expect([1, 2, 3, 4, 6, 7, 50].map(storyLength)).toEqual([1, 2, 2, 3, 3, 4, 4]);
   expect([stars(4, 7), stars(4, 8), stars(4, 10), stars(4, 11)]).toEqual([3, 2, 2, 1]);
   expect(stars(1, 3)).toBe(3);
   expect(chapterOf(1).name).toBe('Piggy Bank');
