@@ -41,7 +41,7 @@ function renderStats() {
   const recent = games.filter((g) => statsLength == null || g.length === statsLength).sort((a, b) => b.at - a.at).slice(0, 6);
   const label = (g: typeof recent[number]) => (g.mode === 'daily' ? `Daily #${dailyNumber(g.date)}`
     : g.mode === 'room' ? `vs ${esc(g.opponent || 'friend')}${g.result ? ` · ${{ win: 'won', lose: 'lost', draw: 'draw' }[g.result]}` : ''}`
-      : g.mode === 'offline' ? `Offline · ${g.length}` : `Single player · ${g.length}`);
+      : g.mode === 'story' ? `Story · level ${g.level ?? '?'}` : g.mode === 'offline' ? `Practice · ${g.length}` : `Single player · ${g.length}`);
   const v = s.versus;
   body.innerHTML = `
     <div class="tiles-grid">

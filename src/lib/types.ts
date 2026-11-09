@@ -10,10 +10,10 @@ export interface Guess {
 
 export interface ServerGame {
   id: string;
-  mode: 'daily' | 'single' | 'room';
+  mode: 'daily' | 'single' | 'room' | 'story';
   length: number;
   day: string | null;
-  round: number | null;
+  round: number | null;     // room round, or story level
   opponent: string | null;
   result: 'win' | 'lose' | 'draw' | null;
   place?: number | null;   // room games, once the round is over
@@ -29,6 +29,12 @@ export interface ServerGame {
 export interface Me {
   name: string | null;
   on_board: boolean;
+  story_level?: number;
+}
+
+export interface StoryMap {
+  level: number;                                  // the level to play next
+  best: { level: number; guesses: number }[];     // fewest guesses per cracked level
 }
 
 export interface RoomPlayer {

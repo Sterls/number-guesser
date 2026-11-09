@@ -4,7 +4,6 @@ import { register, show } from '../app';
 import { configured, currentUser, email, isGuest } from '../net/supabase';
 import { playerName } from '../account';
 import { $, on } from '../ui/dom';
-import { LENGTHS } from '../lib/game';
 import { save, settings } from '../store';
 import { feel } from '../ui/feel';
 
@@ -13,16 +12,6 @@ function renderSettings() {
   $('player-kind').textContent = !configured ? 'Playing offline'
     : !currentUser() ? 'Not connected to the game server'
       : isGuest() ? 'Guest account · tap to sign in with Google' : `Google${email() ? ` · ${email()}` : ''}`;
-  const chips = $('length-chips');
-  chips.innerHTML = '';
-  for (const len of LENGTHS) {
-    const b = document.createElement('button');
-    b.className = `chip${len === settings().length ? ' on' : ''}`;
-    b.textContent = String(len);
-    b.setAttribute('aria-label', `${len} digits`);
-    b.onclick = () => { settings().length = len; save(); renderSettings(); };
-    chips.appendChild(b);
-  }
   $<HTMLInputElement>('set-left').checked = settings().showLeft;
   $<HTMLInputElement>('set-sound').checked = settings().sound;
   $<HTMLInputElement>('set-vibrate').checked = settings().vibrate;

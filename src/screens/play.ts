@@ -1,6 +1,6 @@
-// Daily code and single player. Online, the server makes the code and checks
-// every guess (ranked). Offline, single player is checked on the phone and
-// doesn't count on the leaderboard.
+// Playing a code on your own: the daily code and story levels (the server
+// makes the code and checks every guess), and offline practice (checked on
+// the phone, not saved to your account). Story's map is in story.ts.
 
 import { show, register } from '../app';
 import { $, on, ask, toast, formatTime, plural } from '../ui/dom';
@@ -10,6 +10,7 @@ import { renderGame, rowsHtml, setController, tilesHtml, type Controller, type R
 import { api, online, ApiError } from '../net/api';
 import { data, save, settings, type OfflineGame } from '../store';
 import { DAILY_LENGTH, dailyNumber, explain, makeSecret, remainingFrom, score, todayKey } from '../lib/game';
+import { chapterOf } from '../lib/story';
 import { computeStats, type PlayedGame } from '../lib/stats';
 import type { ServerGame } from '../lib/types';
 import { account, addFinished, allGames, loadStreak, playerName } from '../account';
@@ -28,13 +29,21 @@ function emptyList(length: number) {
 
 // ---------- ranked (server) games ----------
 
-function serverController(start: ServerGame): Controller {
+// Story levels finish on the map's own result (set by story.ts).
+let storyFinished: (g: ServerGame) => void = () => {};
+export const onStoryFinished = (fn: (g: ServerGame) => void) => { storyFinished = fn; };
+
+export function serverController(start: ServerGame): Controller {
   let g = start;
   const notes = (data.notes[g.id] ||= {});
   const rows = (): Row[] => g.guesses.map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
   return {
-    title: () => (g.mode === 'daily' ? `Daily #${dailyNumber(g.day || todayKey())}` : 'Single player'),
-    sub: () => (g.mode === 'daily' ? 'Same code for everyone' : `${g.length} digits`),
+    title: () => (g.mode === 'daily' ? `Daily #${dailyNumber(g.day || todayKey())}` : g.mode === 'story' ? `Level ${g.round}` : 'Single player'),
+    sub: () => {
+      if (g.mode === 'daily') return 'Same code for everyone';
+      if (g.mode === 'story') { const c = chapterOf(g.round ?? 1); return `${c.emoji} ${c.name} · ${plural(g.length, 'digit')}`; }
+      return `${g.length} digits`;
+    },
     length: () => g.length,
     notes: () => notes,
     saveNotes: save,
@@ -81,6 +90,7 @@ function serverController(start: ServerGame): Controller {
 function finishServer(g: ServerGame) {
   delete data.notes[g.id];
   addFinished(g);
+  if (g.mode === 'story') { storyFinished(g); return; }
   void loadStreak();
   const n = g.guesses.length;
   if (g.cracked) {
@@ -95,7 +105,7 @@ function finishServer(g: ServerGame) {
 const fromServer = (g: ServerGame) => allGames().find((x) => x.ranked && x.at === Date.parse(g.finished_at || '')) || null;
 
 export async function startDaily(button?: HTMLElement) {
-  if (!online()) return toast("The daily code needs internet. Single player works offline.");
+  if (!online()) return toast("The daily code needs internet. You can practise offline from Story.");
   try {
     const g = await withSpinner(button, () => api.start('daily', DAILY_LENGTH, todayKey()));
     if (g.finished) return showSoloResult(fromServer(g) || null, true, g);
@@ -106,22 +116,7 @@ export async function startDaily(button?: HTMLElement) {
   }
 }
 
-export async function startSingle(button?: HTMLElement) {
-  const length = settings().length;
-  if (online()) {
-    try {
-      const g = await withSpinner(button, () => api.start('single', length));
-      setController(serverController(g));
-      show('game');
-      return;
-    } catch (e) {
-      if (!(e instanceof ApiError && e.offline)) return toast((e as Error).message);
-    }
-  }
-  startOffline();
-}
-
-async function withSpinner<T>(button: HTMLElement | undefined, fn: () => Promise<T>): Promise<T> {
+export async function withSpinner<T>(button: HTMLElement | undefined, fn: () => Promise<T>): Promise<T> {
   const label = button?.innerHTML;
   if (button) { button.classList.add('busy'); button.innerHTML = '<span class="spinner" aria-hidden="true"></span>Opening…'; }
   try {
@@ -133,8 +128,9 @@ async function withSpinner<T>(button: HTMLElement | undefined, fn: () => Promise
 
 // ---------- offline games ----------
 
-function startOffline() {
-  const length = settings().length;
+// Practice: a 4-digit code checked on the phone, for when there's no internet.
+export function startPractice() {
+  const length = 4;
   if (!data.offline || data.offline.length !== length) {
     data.offline = { length, secret: makeSecret(length), guesses: [], notes: {}, startedAt: Date.now(), elapsed: 0 };
     save();
@@ -146,8 +142,8 @@ function startOffline() {
 function offlineController(g: OfflineGame): Controller {
   const rows = (): Row[] => g.guesses.map((guess) => ({ guess, feedback: score(g.secret, guess) }));
   return {
-    title: () => 'Single player',
-    sub: () => `${g.length} digits · 📴 Offline, not ranked`,
+    title: () => 'Practice',
+    sub: () => `${g.length} digits · 📴 Offline, not saved`,
     length: () => g.length,
     notes: () => g.notes,
     saveNotes: save,
@@ -215,7 +211,7 @@ export function showSoloResult(record: PlayedGame | null, daily: boolean, game?:
   const bits: string[] = [];
   if (s.avgGuesses) bits.push(`${playerName()}'s average for ${length} digits: ${s.avgGuesses.toFixed(1)} guesses`);
   if (daily && account.streak) bits.push(`🔥 ${account.streak}-day streak`);
-  if (record && !record.ranked) bits.push('Offline game: not on the leaderboard');
+  if (record && !record.ranked) bits.push('Practice game: not saved to your account');
   $('result-extra').textContent = bits.join(' · ');
   $('again-btn').textContent = 'Play again';
   $('again-btn').classList.toggle('hidden', daily);
@@ -233,7 +229,7 @@ function shareText(): string {
   const guesses = r?.guesses ?? g?.guesses.map((x) => x.guess) ?? [];
   const secret = r?.secret || g?.secret || '';
   const won = r ? r.won : Boolean(g?.cracked);
-  const head = last.daily ? `Vault #${dailyNumber(r?.date || todayKey())}` : `Vault single player (${secret.length} digits)`;
+  const head = last.daily ? `Vault #${dailyNumber(r?.date || todayKey())}` : `Vault practice (${secret.length} digits)`;
   const rows = guesses.map((x) => { const f = score(secret, x); return `🟢${f.exact} 🟡${f.close}`; });
   return `${head} · ${won ? plural(guesses.length, 'guess') : 'not cracked'}\n🟢 right spot · 🟡 wrong spot\n${rows.join('\n')}`;
 }
@@ -242,13 +238,13 @@ const closeResult = () => $('result').classList.add('hidden');
 const isSolo = () => $('result').dataset.kind === 'solo';
 
 export function bindResult(openBoard: () => void, openStats: (length: number) => void) {
-  on('again-btn', 'click', () => { if (isSolo()) { closeResult(); void startSingle(); } });
+  on('again-btn', 'click', () => { if (isSolo()) { closeResult(); startPractice(); } });
   on('result-home-btn', 'click', () => { if (isSolo()) { closeResult(); show('home'); } });
   on('result-stats-btn', 'click', () => {
     if (!isSolo()) return;
     closeResult();
     if (last?.daily) openBoard();
-    else openStats(last?.record?.length ?? settings().length);
+    else openStats(last?.record?.length ?? 4);
   });
   on('share-btn', 'click', async () => {
     if (!isSolo()) return;

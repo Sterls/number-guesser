@@ -133,7 +133,8 @@ crack the code in as few guesses as you can. When it opens, you'll know.
   rankings by average and best, with games played shown
 ★ PLAY FRIENDS: create a room, send the invite, and up to 8 players race
   to crack the same code. Fewest guesses wins
-★ SINGLE PLAYER: endless codes with 3, 4 or 5 digits. Works offline too
+★ STORY MODE: climb the map from a 1-digit piggy bank to the Federal
+  Reserve. Earn up to 3 stars a level, with a new chapter every 10 levels
 ★ STATS: average guesses, favourite openings, streaks, how sharp your
   guesses are, and your record against friends
 ★ Notes to mark digits in or out as you go

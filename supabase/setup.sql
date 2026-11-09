@@ -26,6 +26,7 @@ create table if not exists public.vault_profiles (
   user_id uuid primary key references auth.users (id) on delete cascade,
   name text check (name is null or char_length(name) between 1 and 20),
   on_board boolean not null default false,
+  story_level int not null default 1,             -- the story level to play next
   hidden boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -70,8 +71,8 @@ create table if not exists public.vault_room_players (
 create table if not exists public.vault_games (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  mode text not null check (mode in ('daily', 'single', 'room')),
-  length int not null check (length between 3 and 5),
+  mode text not null check (mode in ('daily', 'single', 'room', 'story')),
+  length int not null check (length between 1 and 5),
   secret text not null,
   day date,                                         -- daily games
   room_id uuid references public.vault_rooms (id) on delete set null,
@@ -87,6 +88,12 @@ create table if not exists public.vault_games (
   place int                                               -- room games: 1 = first
 );
 alter table public.vault_games add column if not exists place int;
+-- Story mode (version 4): story games, and 1- and 2-digit codes for its first levels.
+alter table public.vault_profiles add column if not exists story_level int not null default 1;
+alter table public.vault_games drop constraint if exists vault_games_mode_check;
+alter table public.vault_games add constraint vault_games_mode_check check (mode in ('daily', 'single', 'room', 'story'));
+alter table public.vault_games drop constraint if exists vault_games_length_check;
+alter table public.vault_games add constraint vault_games_length_check check (length between 1 and 5);
 -- (Re)link room games to rooms: rooms are dropped and recreated when their shape changes.
 alter table public.vault_games drop constraint if exists vault_games_room_id_fkey;
 update public.vault_games set room_id = null
@@ -251,7 +258,7 @@ declare
 begin
   insert into vault_profiles (user_id) values (me) on conflict do nothing;
   select * into p from vault_profiles where user_id = me;
-  return json_build_object('name', p.name, 'on_board', p.on_board);
+  return json_build_object('name', p.name, 'on_board', p.on_board, 'story_level', p.story_level);
 end;
 $$;
 
@@ -368,7 +375,8 @@ begin
   perform vault_me();
   update vault_profiles p set
     name = coalesce(p.name, o.name),
-    on_board = p.on_board or o.on_board
+    on_board = p.on_board or o.on_board,
+    story_level = greatest(p.story_level, o.story_level)
   from vault_profiles o where p.user_id = me and o.user_id = old;
   delete from vault_profiles where user_id = old;
   return vault_me();
@@ -472,6 +480,10 @@ begin
     perform vault_room_settle(g.room_id);
     select * into g from vault_games where id = g.id;
   end if;
+  -- Story: cracking the level you're on opens the next one.
+  if g.mode = 'story' and g.cracked then
+    update vault_profiles set story_level = g.round + 1 where user_id = me and story_level = g.round;
+  end if;
   return vault_game_json(g);
 end;
 $$;
@@ -497,6 +509,61 @@ begin
   end if;
   return vault_game_json(g);
 end;
+$$;
+
+-- ---------- story ----------
+-- Levels on a map: level 1 is a 1-digit code, level 2 two digits, level 3
+-- three, then 4 digits from level 4 on, with no end. Cracking the level
+-- you're on opens the next. Earlier levels can be replayed (for more stars),
+-- which doesn't change your progress. The level number is kept in `round`.
+
+-- Start (or carry on with) a story level: the next one by default.
+create or replace function public.vault_story_start(p_level int default null)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := vault_me_id();
+  current_level int;
+  lvl int;
+  g vault_games%rowtype;
+begin
+  perform vault_me();
+  select story_level into current_level from vault_profiles where user_id = me;
+  lvl := coalesce(p_level, current_level);
+  if lvl < 1 or lvl > current_level then
+    raise exception 'level locked' using errcode = '22023';
+  end if;
+  select * into g from vault_games
+    where user_id = me and mode = 'story' and round = lvl and finished_at is null
+    order by started_at desc limit 1;
+  if not found then
+    insert into vault_games (user_id, mode, length, secret, round)
+      values (me, 'story', least(lvl, 4), vault_make_code(least(lvl, 4)), lvl)
+      returning * into g;
+  end if;
+  return vault_game_json(g);
+end;
+$$;
+
+-- The map: the level to play next, and the fewest guesses for each level cracked.
+create or replace function public.vault_story_map()
+returns json
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select json_build_object(
+    'level', (select story_level from vault_profiles where user_id = vault_me_id()),
+    'best', coalesce((
+      select json_agg(json_build_object('level', round, 'guesses', best) order by round)
+      from (select round, min(array_length(guesses, 1)) as best
+            from vault_games
+            where user_id = vault_me_id() and mode = 'story' and cracked
+            group by round) x), '[]'::json));
 $$;
 
 -- ---------- rooms ----------
@@ -890,7 +957,7 @@ begin
     'vault_start(text, integer, date)', 'vault_game(uuid)', 'vault_guess(uuid, text)', 'vault_give_up(uuid)',
     'vault_room_state(uuid)', 'vault_room_create(integer)', 'vault_room_join(text)',
     'vault_room_start(uuid)', 'vault_room_end(uuid)', 'vault_room_leave(uuid)',
-    'vault_my_streak(date)', 'vault_report(text)'] loop
+    'vault_my_streak(date)', 'vault_report(text)', 'vault_story_start(integer)', 'vault_story_map()'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;

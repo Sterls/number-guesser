@@ -7,7 +7,8 @@ import { dailyNumber, todayKey } from '../lib/game';
 import { online } from '../net/api';
 import { configured, sessionProblem, startSession } from '../net/supabase';
 import { account, allGames, loadMe, loadStreak, refreshHistory } from '../account';
-import { startDaily, startSingle } from './play';
+import { startDaily } from './play';
+import { storyLevel } from './story';
 import { openRoom } from './room';
 
 function renderHome() {
@@ -24,16 +25,16 @@ function renderHome() {
   // Online but no account: say why (usually a Supabase setting) instead of "offline".
   const problem = navigator.onLine ? sessionProblem() : '';
   $('offline-text').textContent = problem
-    ? `⚠️ Couldn't connect to the game server (${problem}). Single player still works, but won't count on the leaderboard.`
+    ? `⚠️ Couldn't connect to the game server (${problem}). You can still practise offline from Story.`
     : navigator.onLine ? '⚠️ Connecting to the game server…'
-      : "📴 You're offline. Single player still works, but won't count on the leaderboard.";
+      : "📴 You're offline. You can still practise from Story; it won't be saved.";
   $('retry-btn').classList.toggle('hidden', !navigator.onLine);
   $('daily-btn').classList.toggle('dim', !isOnline);
   $('versus-btn').classList.toggle('hidden', !configured);
   $('versus-btn').classList.toggle('dim', !isOnline);
   $('versus-btn').textContent = data.room ? `⚔️ Back to room ${data.room.code}` : '⚔️ Play friends';
   $('board-btn').classList.toggle('hidden', !configured);
-  $('practice-btn').textContent = !isOnline && data.offline ? 'Continue single player' : 'Single player';
+  $('story-btn').textContent = `🗺️ Story · Level ${storyLevel()}`;
 }
 
 register('home', renderHome);
@@ -44,7 +45,7 @@ on('settings-btn', 'click', () => show('settings'));
 on('stats-btn', 'click', () => show('stats'));
 on('board-btn', 'click', () => show('board'));
 on('daily-btn', 'click', () => void startDaily($('daily-btn')));
-on('practice-btn', 'click', () => void startSingle($('practice-btn')));
+on('story-btn', 'click', () => show('story'));
 on('versus-btn', 'click', () => openRoom());
 on('retry-btn', 'click', async () => {
   $('retry-btn').textContent = 'Trying…';

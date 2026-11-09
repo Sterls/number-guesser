@@ -50,6 +50,7 @@ export function toPlayed(g: ServerGame): PlayedGame {
     ranked: true,
     result: g.result ?? undefined,
     opponent: g.opponent ?? undefined,
+    level: g.mode === 'story' ? g.round ?? undefined : undefined,
   };
 }
 

@@ -1,7 +1,7 @@
 // The server calls (Postgres functions in supabase/setup.sql).
 
 import { supabase, currentUser } from './supabase';
-import type { Board, BoardRow, DailyRow, Me, RoomState, ServerGame } from '../lib/types';
+import type { Board, BoardRow, DailyRow, Me, RoomState, ServerGame, StoryMap } from '../lib/types';
 
 export class ApiError extends Error {
   offline: boolean;
@@ -45,6 +45,8 @@ export const api = {
   guess: (id: string, guess: string) => rpc<ServerGame>('vault_guess', { p_game: id, p_guess: guess }),
   giveUp: (id: string) => rpc<ServerGame>('vault_give_up', { p_game: id }),
   myStreak: (day: string) => rpc<number>('vault_my_streak', { p_day: day }),
+  storyStart: (level?: number) => rpc<ServerGame>('vault_story_start', { p_level: level ?? null }),
+  storyMap: () => rpc<StoryMap>('vault_story_map'),
 
   roomCreate: (length: number) => rpc<RoomState>('vault_room_create', { p_length: length }),
   roomJoin: (code: string) => rpc<RoomState>('vault_room_join', { p_code: code }),

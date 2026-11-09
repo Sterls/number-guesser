@@ -50,9 +50,9 @@
     <h1>Vault</h1>
     <p class="tagline">Crack the code.</p>
     <p id="streak" class="streak hidden"></p>
-    <div id="offline-note" class="offline-note hidden"><p id="offline-text">📴 You're offline. Single player still works, but won't count on the leaderboard.</p><button id="retry-btn" class="link hidden">Try again</button></div>
+    <div id="offline-note" class="offline-note hidden"><p id="offline-text">📴 You're offline. You can still practise from Story; it won't be saved.</p><button id="retry-btn" class="link hidden">Try again</button></div>
     <button id="daily-btn" class="btn big">Daily code</button>
-    <button id="practice-btn" class="btn secondary">Single player</button>
+    <button id="story-btn" class="btn secondary">🗺️ Story</button>
     <button id="versus-btn" class="btn secondary">⚔️ Play friends</button>
     <div class="home-row">
       <button id="board-btn" class="btn secondary half">🏆 Leaderboard</button>
@@ -95,6 +95,21 @@
       <div id="acct-board" class="card acct-card"></div>
       <button id="acct-delete" class="btn ghost danger-text">Delete my account</button>
       <p class="fine center"><a href="privacy.html">Privacy policy</a></p>
+    </div>
+  </section>
+
+  <!-- Story: the map of levels -->
+  <section id="story" class="screen hidden">
+    <div class="bar">
+      <button class="icon-btn back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Story</h2>
+      <div class="bar-spacer"></div>
+    </div>
+    <div id="story-scroll" class="story-scroll"><div id="story-map" class="story-map"></div></div>
+    <div class="story-foot">
+      <p id="story-next" class="story-next"></p>
+      <button id="story-play" class="btn big">Play</button>
+      <p id="story-offline" class="offline-note hidden">📴 Story levels need internet. <button id="story-practice" class="link">Practise offline</button></p>
     </div>
   </section>
 
@@ -260,10 +275,6 @@
       <span class="account-go" aria-hidden="true">›</span>
     </button>
     <div class="card settings-card">
-      <div class="setting">
-        <span>Single player code length</span>
-        <div id="length-chips" class="chips" role="group" aria-label="Single player code length"></div>
-      </div>
       <label class="setting"><span>Sound</span><input id="set-sound" type="checkbox"></label>
       <label class="setting"><span>Vibrate<small>Android phones only.</small></span><input id="set-vibrate" type="checkbox"></label>
       <label class="setting"><span>Show how many codes are still possible<small>A helper for learning. Off by default.</small></span><input id="set-left" type="checkbox"></label>

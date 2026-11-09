@@ -110,6 +110,7 @@ async function doSignOut() {
     data.history = [];
     data.historyFor = '';
     data.name = '';
+    data.story = { level: 1, best: {} };
     save();
     account.me = null;
     account.streak = 0;
@@ -149,6 +150,7 @@ on('acct-delete', 'click', async () => {
   data.room = null;
   data.notes = {};
   data.name = '';
+  data.story = { level: 1, best: {} };
   save();
   account.me = null;
   account.streak = 0;

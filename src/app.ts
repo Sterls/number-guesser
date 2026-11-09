@@ -3,8 +3,8 @@
 
 import { $ } from './ui/dom';
 
-export type Screen = 'home' | 'name' | 'account' | 'versus' | 'game' | 'stats' | 'board' | 'help' | 'settings';
-const SCREENS: Screen[] = ['home', 'name', 'account', 'versus', 'game', 'stats', 'board', 'help', 'settings'];
+export type Screen = 'home' | 'name' | 'account' | 'story' | 'versus' | 'game' | 'stats' | 'board' | 'help' | 'settings';
+const SCREENS: Screen[] = ['home', 'name', 'account', 'story', 'versus', 'game', 'stats', 'board', 'help', 'settings'];
 
 const renderers: Partial<Record<Screen, () => void>> = {};
 const leaving: ((from: Screen, to: Screen) => void)[] = [];

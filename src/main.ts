@@ -13,6 +13,7 @@ import { joinByCode, resumeRoom } from './screens/room';
 import { setStatsLength } from './screens/stats';
 import { showToday } from './screens/board';
 import './screens/home';
+import { loadStory } from './screens/story';
 import './screens/settings';
 
 bindResult(
@@ -47,7 +48,7 @@ async function init() {
     if (await finishSwitch((t) => api.merge(t))) toast('Signed in with Google.');
     await loadMe();
     // History and streak arrive after the first screen: redraw it when they do.
-    void Promise.all([refreshHistory(), loadStreak()]).then(() => { if (screen() === 'home' || screen() === 'stats') refresh(); });
+    void Promise.all([refreshHistory(), loadStreak(), loadStory()]).then(() => { if (screen() === 'home' || screen() === 'stats') refresh(); });
   }
   $('splash').classList.add('hidden');
   if (problem) toast(problem, 6000);

@@ -29,6 +29,7 @@ interface Save {
   history: PlayedGame[];        // the account's server games, cached
   historyFor: string;           // which account `history` belongs to
   room: { id: string; code: string } | null;
+  story: { level: number; best: Record<number, number> }; // the story map, cached for offline
   notes: Record<string, Record<string, number>>; // notes per server game id
   migrated: boolean;
 }
@@ -44,6 +45,7 @@ const defaults = (): Save => ({
   history: [],
   historyFor: '',
   room: null,
+  story: { level: 1, best: {} },
   notes: {},
   migrated: false,
 });

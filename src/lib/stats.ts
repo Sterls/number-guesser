@@ -3,7 +3,7 @@
 
 import { fitsFeedback, score } from './game';
 
-export type Mode = 'daily' | 'single' | 'room' | 'offline';
+export type Mode = 'daily' | 'single' | 'room' | 'offline' | 'story';
 
 // A finished game, from the server (ranked) or played offline on this phone.
 export interface PlayedGame {
@@ -18,6 +18,7 @@ export interface PlayedGame {
   ranked: boolean;           // checked by the server
   result?: 'win' | 'lose' | 'draw'; // games against a friend
   opponent?: string;
+  level?: number;             // story games
 }
 
 export interface Tally { value: string; count: number }
