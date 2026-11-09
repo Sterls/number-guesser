@@ -6,7 +6,7 @@
 import { register, screen } from '../app';
 import { $, ask, esc, formatTime, toast } from '../ui/dom';
 import { api, online } from '../net/api';
-import { DAILY_LENGTH, LENGTHS, dailyNumber, todayKey } from '../lib/game';
+import { DAILY_LENGTH, dailyNumber, todayKey } from '../lib/game';
 import type { BoardRow, DailyRow } from '../lib/types';
 import { account, loadMe, playerName } from '../account';
 import { setBoard } from './account';
@@ -14,6 +14,8 @@ import { setBoard } from './account';
 let view: 'today' | 'all' = 'today';
 let order: 'avg' | 'best' = 'avg';
 let length = DAILY_LENGTH;
+// All-time boards: 3 and 4 digits (no 5-digit board).
+const BOARD_LENGTHS = [3, 4];
 let seq = 0;
 
 export const showToday = () => { view = 'today'; };
@@ -31,7 +33,7 @@ async function renderBoard() {
   });
   const chips = $('board-length');
   chips.innerHTML = '';
-  for (const len of LENGTHS) {
+  for (const len of BOARD_LENGTHS) {
     const b = document.createElement('button');
     b.className = `chip${len === length ? ' on' : ''}`;
     b.textContent = `${len} digits`;
