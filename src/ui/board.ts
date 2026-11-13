@@ -84,6 +84,8 @@ export function showExplanation(i: number) {
 
 // "See my guesses" after a game: each guess gets a quality score.
 let review: GuessReview[] = [];
+// What the list last showed: whose game and how many guesses.
+let shown: { ctl: Controller | null; rows: number } = { ctl: null, rows: -1 };
 const reviewing = () => !$('result-back').classList.contains('hidden');
 
 export function renderGame(justGuessed = false) {
@@ -96,7 +98,14 @@ export function renderGame(justGuessed = false) {
   $('room-menu-btn').classList.toggle('hidden', ctl.action !== 'gear');
 
   const list = $('guesses');
+  // Remember where the player had scrolled to and which guess they'd tapped,
+  // so a redraw that changes nothing (a room checks in every few seconds) leaves them be.
+  const scrollWas = list.scrollTop;
+  const pickedWas = [...list.querySelectorAll('.guess-row:not(.theirs)')].findIndex((r) => r.classList.contains('picked'));
   const rows = ctl.list(list, justGuessed);
+  const now = { ctl, rows: rows ? rows.length : -1 };
+  const same = !justGuessed && shown.ctl === now.ctl && shown.rows === now.rows;
+  shown = now;
   list.querySelectorAll<HTMLElement>('.guess-row[data-i]:not(.theirs)').forEach((row) => {
     row.onclick = () => showExplanation(Number(row.dataset.i));
   });
@@ -119,9 +128,9 @@ export function renderGame(justGuessed = false) {
   $('guess-head').classList.toggle('no-cols', !rows?.length); // no guess rows: no column headings
   $('guess-head-label').innerHTML = head ?? 'Your guess';
   ctl.onHead?.($('guess-head-label'));
-  if (rows?.length && list.querySelector('.guess-row[data-i]:not(.theirs)')) showExplanation(rows.length - 1);
-  // Guesses: show the newest. Anything else (players, instructions): from the top.
-  list.scrollTop = rows?.length ? list.scrollHeight : 0;
+  if (rows?.length && list.querySelector('.guess-row[data-i]:not(.theirs)')) showExplanation(same && pickedWas >= 0 ? pickedWas : rows.length - 1);
+  // A new guess (or a different list): show the newest guess; anything else (players, instructions) from the top.
+  list.scrollTop = same ? scrollWas : rows?.length ? list.scrollHeight : 0;
 
   const panel = ctl.panel();
   $('vs-panel').innerHTML = panel;
