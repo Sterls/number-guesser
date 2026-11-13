@@ -33,13 +33,17 @@ function inviteFromUrl(): string | null {
   return /^[A-Za-z0-9]{5}$/.test(code) ? code.toUpperCase() : null;
 }
 
+const SPLASH_MS = 6000;
+
 async function init() {
   setupUpdates();
   migrate();
   const invite = inviteFromUrl();
   $('splash').classList.remove('hidden');
   let problem = '';
-  if (configured) {
+  let late = false; // the server took too long: the game opened without it
+  const account = async () => {
+    if (!configured) return;
     try {
       problem = await startSession();
     } catch {
@@ -49,13 +53,30 @@ async function init() {
     await loadMe();
     // History and streak arrive after the first screen: redraw it when they do.
     void Promise.all([refreshHistory(), loadStreak(), loadStory()]).then(() => { if (screen() === 'home' || screen() === 'stats') refresh(); });
-  }
+    if (late) {
+      // Connected after all: bring the first screen up to date.
+      if (problem) toast(problem, 6000);
+      if (screen() === 'home' || screen() === 'stats') refresh();
+      if (screen() === 'home' && data.room && online()) void resumeRoom();
+    }
+  };
+  // Never sit on the loading screen for long: after a few seconds, open the
+  // game anyway (offline play works) and let the account catch up.
+  let ready = false;
+  const opened = account().catch(() => {}).then(() => { ready = true; });
+  await Promise.race([opened, new Promise((done) => setTimeout(done, SPLASH_MS))]);
+  late = !ready;
   $('splash').classList.add('hidden');
-  if (problem) toast(problem, 6000);
+  if (late) toast("Can't reach the server yet. You can play offline for now.", 6000);
+  else if (problem) toast(problem, 6000);
 
+  const anyScreen = () => Boolean(document.querySelector('section.screen:not(.hidden)'));
   const next = () => {
-    if (invite) return void joinByCode(invite);
-    if (data.room && online()) return void resumeRoom().then(() => { if (!data.room) show('home'); });
+    // The server is slow: the menu now; the room (or invite) once it answers.
+    if (late) { show('home'); if (invite) void joinByCode(invite); return; }
+    if (invite) return void Promise.resolve(joinByCode(invite)).catch(() => {}).then(() => { if (!anyScreen()) show('home'); });
+    // Back into the room you were in; if that doesn't work out, the menu.
+    if (data.room && online()) return void resumeRoom().catch(() => {}).then(() => { if (!anyScreen()) show('home'); });
     show('home');
   };
   if (!data.name) {

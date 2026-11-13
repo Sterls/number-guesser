@@ -9,9 +9,20 @@ import { SUPABASE } from '../config';
 
 export const configured = Boolean(SUPABASE.url && SUPABASE.key);
 
+// A request the server never answers (a connection with no internet behind
+// it, a server that's down) is given up on, so nothing waits on it forever.
+const TIMEOUT_MS = 12_000;
+function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), TIMEOUT_MS);
+  init.signal?.addEventListener('abort', () => stop.abort());
+  return fetch(input, { ...init, signal: stop.signal }).finally(() => clearTimeout(timer));
+}
+
 export const supabase: SupabaseClient | null = configured
   ? createClient(SUPABASE.url, SUPABASE.key, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce', storageKey: 'vault-auth' },
+    global: { fetch: fetchWithTimeout },
   })
   : null;
 
