@@ -36,13 +36,18 @@ export interface Controller {
 }
 
 let ctl: Controller | null = null;
-let draft = '';
+// The guess being built: one entry per box ('' = empty), and the box the
+// next digit goes into. Tap a box to fill the digits in any order.
+let draft: string[] = [];
+let cursor = 0;
 let sending = false;
+const filled = () => draft.filter(Boolean).length;
 
 export const controller = () => ctl;
 export function setController(c: Controller | null) {
   ctl = c;
-  draft = '';
+  draft = [];
+  cursor = 0;
   $('entry-msg').textContent = '';
 }
 
@@ -134,10 +139,14 @@ export function renderEntry() {
   const notes = c.notes();
   const slots = $('slots');
   slots.innerHTML = '';
+  if (draft.length !== length) { draft = Array.from({ length }, () => ''); cursor = 0; }
   for (let i = 0; i < length; i++) {
-    const s = document.createElement('span');
-    s.className = `tile slot${i === draft.length ? ' next' : ''}${draft[i] ? ' filled' : ''}`;
-    s.textContent = draft[i] || '';
+    const s = document.createElement('button');
+    s.type = 'button';
+    s.className = `tile slot${i === cursor ? ' next' : ''}${draft[i] ? ' filled' : ''}`;
+    s.textContent = draft[i];
+    s.setAttribute('aria-label', `Digit ${i + 1}${draft[i] ? `: ${draft[i]}` : ', empty'}${i === cursor ? ' (selected)' : ''}`);
+    s.onclick = () => { if (sending) return; cursor = i; feel.note(); renderEntry(); };
     slots.appendChild(s);
   }
   const noteRow = $('notes');
@@ -161,8 +170,9 @@ export function renderEntry() {
     if (k === 'go' && sending) b.innerHTML = '<span class="spinner" aria-hidden="true"></span>';
     else b.textContent = k === 'del' ? '⌫' : k === 'go' ? c.goLabel() : k;
     if (k === 'del') b.setAttribute('aria-label', 'Delete');
-    b.disabled = sending || (k.length === 1 && (draft.includes(k) || draft.length >= length))
-      || (k === 'go' && draft.length !== length) || (k === 'del' && !draft.length);
+    // A digit already in another box can still be pressed: it moves to the selected box.
+    if (k.length === 1 && draft.includes(k)) b.classList.add('used');
+    b.disabled = sending || (k === 'go' && filled() !== length) || (k === 'del' && !filled());
     b.onclick = () => press(k);
     pad.appendChild(b);
   }
@@ -173,13 +183,20 @@ export async function press(k: string) {
   const length = ctl.length();
   $('entry-msg').textContent = '';
   if (k === 'del') {
-    if (!draft) return;
-    draft = draft.slice(0, -1);
+    if (!filled()) return;
+    // Clear the selected box; if it's empty, the nearest filled box before it (else the last one).
+    if (!draft[cursor]) {
+      let i = cursor - 1;
+      while (i >= 0 && !draft[i]) i--;
+      if (i < 0) { i = length - 1; while (!draft[i]) i--; }
+      cursor = i;
+    }
+    draft[cursor] = '';
     feel.del();
   } else if (k === 'go') {
-    const problem = guessProblem(draft, length);
+    const code = draft.join('');
+    const problem = guessProblem(code, length);
     if (problem) { $('entry-msg').textContent = problem; return; }
-    const code = draft;
     sending = true;
     renderEntry();
     let message: string | void;
@@ -189,10 +206,21 @@ export async function press(k: string) {
       sending = false;
     }
     if (message) $('entry-msg').textContent = message;
-    else draft = '';
-  } else if (draft.length < length && !draft.includes(k)) {
-    draft += k;
+    else { draft = []; cursor = 0; }
+  } else if (k === 'left' || k === 'right') {
+    cursor = (cursor + (k === 'left' ? length - 1 : 1)) % length;
+  } else {
+    // Each digit only once: one that's already in another box moves here.
+    const at = draft.indexOf(k);
+    if (at === cursor) return;
+    if (at >= 0) draft[at] = '';
+    draft[cursor] = k;
     feel.key();
+    // On to the next empty box (to the right first), if there is one.
+    for (let step = 1; step <= length; step++) {
+      const i = (cursor + step) % length;
+      if (!draft[i]) { cursor = i; break; }
+    }
   }
   renderEntry();
 }
@@ -202,6 +230,8 @@ document.addEventListener('keydown', (e) => {
   if ($('game').classList.contains('hidden') || target.tagName === 'INPUT' || e.metaKey || e.ctrlKey) return;
   if (/^\d$/.test(e.key)) void press(e.key);
   else if (e.key === 'Backspace') void press('del');
+  else if (e.key === 'ArrowLeft') void press('left');
+  else if (e.key === 'ArrowRight') void press('right');
   else if (e.key === 'Enter') { e.preventDefault(); void press('go'); }
 });
 
