@@ -80,3 +80,23 @@ test('story: code lengths, stars and chapters', async () => {
   expect(chapterOf(11).name).toBe('School Locker');
   expect(chapterOf(101).name).toBe('Piggy Bank II');
 });
+
+test('review: how good each guess was', async () => {
+  const { reviewGame, reviewText } = await import('../src/lib/review');
+  const secret = '5976';
+  const guesses = ['0123', '0123', '4567', '5976'];
+  const r = reviewGame(4, guesses, guesses.map((g) => score(secret, g)));
+  expect(r.map((x) => x.before)).toEqual([5040, 360, 360, r[3].before]);
+  expect(r[0].quality).toBe(1);             // any first guess is as good as another
+  expect(r[1].quality).toBe(0);             // repeating a guess rules nothing out
+  expect(r[1].possible).toBe(false);
+  expect(r[2].quality).toBeGreaterThan(0.9);
+  expect(r[2].quality).toBeLessThanOrEqual(1);
+  expect(r[3].after).toBe(0);
+  expect(reviewText(r[1], 1)).toMatch(/^Quality 0%: 360 codes were still possible/);
+  // One code left: guessing it is perfect, anything else is worthless.
+  const one = reviewGame(1, ['0', '1', '2', '3', '4', '5', '6', '7', '9', '9'], [...'012345679'].map(() => ({ exact: 0, close: 0 })).concat({ exact: 0, close: 0 }));
+  expect(one[8].before).toBe(2);
+  const last = reviewGame(2, ['01', '10'], [{ exact: 0, close: 2 }, { exact: 2, close: 0 }]);
+  expect(last[1]).toMatchObject({ before: 1, after: 0, quality: 1 });
+});

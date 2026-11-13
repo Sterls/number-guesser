@@ -6,6 +6,7 @@ import { $, esc } from './dom';
 import { feel } from './feel';
 import type { Feedback } from '../lib/game';
 import { guessProblem } from '../lib/game';
+import { reviewGame, reviewText, type GuessReview } from '../lib/review';
 
 export interface Row {
   guess: string;
@@ -66,7 +67,8 @@ export function showExplanation(i: number) {
   list.querySelector('.explain')?.remove();
   const rows = list.querySelectorAll('.guess-row:not(.theirs)');
   rows.forEach((row, j) => row.classList.toggle('picked', j === i));
-  const text = ctl.explain(i);
+  const r = reviewing() ? review[i] : undefined;
+  const text = r ? `${ctl.explain(i).split(/(?<=[.!]) /)[0]} ${reviewText(r, i)}` : ctl.explain(i);
   if (!text || !rows[i]) return;
   const li = document.createElement('li');
   li.className = 'explain';
@@ -74,6 +76,10 @@ export function showExplanation(i: number) {
   li.textContent = text;
   rows[i].after(li);
 }
+
+// "See my guesses" after a game: each guess gets a quality score.
+let review: GuessReview[] = [];
+const reviewing = () => !$('result-back').classList.contains('hidden');
 
 export function renderGame(justGuessed = false) {
   if (!ctl) return;
@@ -88,6 +94,16 @@ export function renderGame(justGuessed = false) {
   const rows = ctl.list(list, justGuessed);
   list.querySelectorAll<HTMLElement>('.guess-row[data-i]:not(.theirs)').forEach((row) => {
     row.onclick = () => showExplanation(Number(row.dataset.i));
+  });
+  // Looking back after the game: how good each guess was.
+  review = reviewing() && rows?.length && rows.every((r) => r.feedback)
+    ? reviewGame(rows[0].guess.length, rows.map((r) => r.guess), rows.map((r) => r.feedback!)) : [];
+  $('game').classList.toggle('review', review.length > 0);
+  list.querySelectorAll<HTMLElement>('.guess-row[data-i]:not(.theirs)').forEach((row) => {
+    const r = review[Number(row.dataset.i)];
+    if (!r) return;
+    const pct = Math.round(r.quality * 100);
+    row.insertAdjacentHTML('beforeend', `<span class="quality ${pct >= 90 ? 'good' : pct >= 60 ? 'ok' : 'poor'}" aria-label="Guess quality ${pct}%">${pct}%</span>`);
   });
   const tabs = ctl.tabs?.() ?? '';
   $('game-tabs').innerHTML = tabs;
@@ -200,8 +216,9 @@ for (const id of ['giveup-btn', 'room-menu-btn']) {
 $('result-view-btn').addEventListener('click', () => {
   $('result').classList.add('hidden');
   $('result-back').classList.remove('hidden');
-  const list = $('guesses');
-  list.scrollTop = list.scrollHeight;
+  renderGame();
+  showExplanation(0);
+  $('guesses').scrollTop = 0;
 });
 $('result-back-btn').addEventListener('click', () => {
   $('result').classList.remove('hidden');
