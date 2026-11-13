@@ -107,6 +107,7 @@ export function renderGame(justGuessed = false) {
   $('vs-panel').classList.toggle('hidden', !panel);
   if (panel) ctl.bindPanel?.($('vs-panel'));
   $('entry').classList.toggle('hidden', !ctl.canType());
+  if (ctl.canType()) $('result-back').classList.add('hidden'); // a new game or round
   renderEntry();
 }
 
@@ -192,3 +193,20 @@ document.addEventListener('keydown', (e) => {
 for (const id of ['giveup-btn', 'room-menu-btn']) {
   document.getElementById(id)?.addEventListener('click', () => ctl?.onAction());
 }
+
+// ---------- looking back at the guesses after a game ----------
+// "See my guesses" on the result puts it aside to show the finished game;
+// "Back to result" (where the keypad was) brings it back.
+$('result-view-btn').addEventListener('click', () => {
+  $('result').classList.add('hidden');
+  $('result-back').classList.remove('hidden');
+  const list = $('guesses');
+  list.scrollTop = list.scrollHeight;
+});
+$('result-back-btn').addEventListener('click', () => {
+  $('result').classList.remove('hidden');
+});
+// Whenever the result is on screen, the "Back to result" bar isn't needed.
+new MutationObserver(() => {
+  if (!$('result').classList.contains('hidden')) $('result-back').classList.add('hidden');
+}).observe($('result'), { attributes: true, attributeFilter: ['class'] });

@@ -35,7 +35,7 @@ export const onStoryFinished = (fn: (g: ServerGame) => void) => { storyFinished 
 
 export function serverController(start: ServerGame): Controller {
   let g = start;
-  const notes = (data.notes[g.id] ||= {});
+  const notes = g.finished ? {} : (data.notes[g.id] ||= {});
   const rows = (): Row[] => g.guesses.map((x) => ({ guess: x.guess, feedback: { exact: x.exact, close: x.close } }));
   return {
     title: () => (g.mode === 'daily' ? `Daily #${dailyNumber(g.day || todayKey())}` : g.mode === 'story' ? `Level ${g.round}` : 'Single player'),
@@ -108,9 +108,9 @@ export async function startDaily(button?: HTMLElement) {
   if (!online()) return toast("The daily code needs internet. You can practise offline from Story.");
   try {
     const g = await withSpinner(button, () => api.start('daily', DAILY_LENGTH, todayKey()));
-    if (g.finished) return showSoloResult(fromServer(g) || null, true, g);
     setController(serverController(g));
-    show('game');
+    show('game'); // already played today: the game shows behind its result
+    if (g.finished) showSoloResult(fromServer(g) || null, true, g);
   } catch (e) {
     toast((e as Error).message);
   }
